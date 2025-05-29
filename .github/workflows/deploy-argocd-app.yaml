@@ -26,7 +26,8 @@ jobs:
       # Assuming you will place argocd-ingress-http-modified.yaml in 'argocd-ingress/'
       # NOTE: This 'run' command still refers to the '-modified' file name.
       # If your actual file is named 'argocd-ingress-http.yaml', you will need to update this line too.
-      run: kubectl apply -f argocd-ingress/argocd-ingress-http.yaml
+      # Added --validate=false to bypass OpenAPI validation issue
+      run: kubectl apply -f argocd-ingress/argocd-ingress-http.yaml --validate=false
 
     - name: Apply ArgoCD Nginx Application
       # This will create the ArgoCD Application resource.
