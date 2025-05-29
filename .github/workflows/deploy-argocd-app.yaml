@@ -6,9 +6,10 @@ on:
     branches:
       - main # Trigger on pushes to the main branch
     paths:
-      - 'argocd-ingress/argocd-ingress-http.yaml' # Corrected path
+      - 'argocd-ingress/argocd-ingress-http.yaml' # CORRECTED path in filter (removed -modified)
       - 'argocd-apps/nginx-app.yaml'
       - 'k8s-manifests/nginx/**' # Trigger if Nginx manifests change
+      - '.github/workflows/deploy-argocd-app.yaml' # Explicitly include workflow file itself
 
 jobs:
   deploy:
@@ -17,20 +18,14 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Set up Kubeconfig
-      # IMPORTANT: Ensure your self-hosted runner has kubectl configured
-      # This step decodes a base64-encoded Kubeconfig secret and writes it
-      # to ~/.kube/config on the runner.
-      env:
-        KUBECONFIG_BASE64: ${{ secrets.KUBECONFIG_BASE64 }} # Your base64 encoded kubeconfig secret
-      run: |
-        mkdir -p ~/.kube
-        echo "$KUBECONFIG_BASE64" | base64 -d > ~/.kube/config
-        chmod 600 ~/.kube/config
-        echo "Kubeconfig has been set up on the runner."
+    # The 'Set up Kubeconfig' step has been REMOVED.
+    # It is assumed that the kubeconfig file is already configured
+    # on your self-hosted runner machine at /Users/alex/.kube/config.
 
     - name: Apply Modified ArgoCD Ingress (HTTP)
       # Assuming you will place argocd-ingress-http-modified.yaml in 'argocd-ingress/'
+      # NOTE: This 'run' command still refers to the '-modified' file name.
+      # If your actual file is named 'argocd-ingress-http.yaml', you will need to update this line too.
       run: kubectl apply -f argocd-ingress/argocd-ingress-http-modified.yaml
 
     - name: Apply ArgoCD Nginx Application
