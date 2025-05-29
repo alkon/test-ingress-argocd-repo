@@ -1,14 +1,16 @@
+# argocd-ingress/argocd-ingress-http.yaml
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: argocd-server-ingress
+  name: argocd-server-http-ingress
   namespace: argocd
   annotations:
-    kubernetes.io/ingress.class: nginx
-    # Removed backend-protocol: HTTPS and ssl-passthrough for HTTP
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "false" # Keep if using Nginx Ingress Controller for HTTP
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"  # ArgoCD server uses HTTPS internally
 spec:
+  ingressClassName: nginx # Or 'traefik' depending on your Ingress Controller setup in Docker Desktop
   rules:
-  - host: "77.127.167.27.nip.io"
+  - host: argocd.127.0.0.1.nip.io # <--- CHANGE THIS LINE
     http:
       paths:
       - path: /
@@ -16,9 +18,5 @@ spec:
         backend:
           service:
             name: argocd-server
-            # Changed port to 80 for HTTP access to ArgoCD server
-            # Ensure your argocd-server service exposes an HTTP port (e.g., 80)
-            # that maps to ArgoCD's internal HTTP port (8080).
             port:
               number: 80
-  # Removed the 'tls' section for HTTP
