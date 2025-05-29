@@ -106,3 +106,5 @@ log/
 .fuse_hidden*
 .nfs*
 *.tmp
+
+# Other
