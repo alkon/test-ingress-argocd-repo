@@ -6,38 +6,37 @@ on:
     branches:
       - main # Trigger on pushes to the main branch
     paths:
-      - 'argocd-ingress/argocd-ingress-http.yaml'
-      - 'argocd-apps/nginx-app.yaml'
-      - 'k8s-manifests/nginx/**' # Trigger if Nginx manifests change
-      - '.github/workflows/deploy-argocd-app.yaml' # Explicitly include workflow file itself
+      - 'argocd-ingress/**'           # Trigger on any change within the argocd-ingress directory
+      - 'argocd-apps/**'              # Trigger on any change within the argocd-apps directory
+      - 'k8s-manifests/nginx/**'      # Already using a glob, keeps as is
+      - '.github/workflows/**'        # Trigger on any change within the .github/workflows directory (includes this workflow file)
 
 jobs:
   deploy:
-    runs-on: self-hosted # Use your self-hosted GitHub Actions runner
+    runs-on: self-hosted
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # The 'Set up Kubeconfig' step has been REMOVED.
-    # It is assumed that the kubeconfig file is already configured
-    # on your self-hosted runner machine at /Users/alex/.kube/config.
-
     - name: Apply Modified ArgoCD Ingress (HTTP)
       run: kubectl apply -f argocd-ingress/argocd-ingress-http.yaml --validate=false
 
-    - name: Apply ArgoCD Nginx Application
+    - name: Apply ArgoCD Nginx Application (Raw YAML)
       run: kubectl apply -f argocd-apps/nginx-app.yaml --validate=false
 
-    - name: Verify ArgoCD Application Status
+    - name: Apply ArgoCD Nginx Helm Application
+      run: kubectl apply -f argocd-apps/nginx-helm-app.yaml --validate=false
+
+    - name: Verify ArgoCD Raw Nginx Application Status
       run: |
         echo "Waiting for ArgoCD application 'nginx-test-app' to become Healthy..."
-        # CORRECTED: Use jsonpath to wait for 'status.health.status' to be 'Healthy'
         kubectl wait --for=jsonpath='{.status.health.status}'=Healthy application/nginx-test-app -n argocd --timeout=5m
         echo "ArgoCD application 'nginx-test-app' is Healthy."
-        
-        # Optional: You can also wait for 'Synced' status if needed
-        # echo "Waiting for ArgoCD application 'nginx-test-app' to be Synced..."
-        # kubectl wait --for=jsonpath='{.status.sync.status}'=Synced application/nginx-test-app -n argocd --timeout=5m
-        # echo "ArgoCD application 'nginx-test-app' is Synced."
-
         kubectl get application nginx-test-app -n argocd -o yaml
+
+    - name: Verify ArgoCD Helm Nginx Application Status
+      run: |
+        echo "Waiting for ArgoCD application 'nginx-helm-app' to become Healthy..."
+        kubectl wait --for=jsonpath='{.status.health.status}'=Healthy application/nginx-helm-app -n argocd --timeout=5m
+        echo "ArgoCD application 'nginx-helm-app' is Healthy."
+        kubectl get application nginx-helm-app -n argocd -o yaml
