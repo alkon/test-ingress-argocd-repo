@@ -1,0 +1,108 @@
+# Git action runner
+actions-runner/
+.runner
+.runner_labels
+.runner_name
+.token
+
+# Python
+# =======
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+*.env
+.env*
+.ipynb_checkpoints
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.manifest
+*.spec
+
+# PyInstaller
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Sphinx documentation
+docs/_build/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Virtualenv
+.venv/
+venv/
+env/
+.env/
+.python-version
+
+# IDEs and Editors
+# ================
+.idea/                  # IntelliJ IDEA / PyCharm
+.vscode/                # VS Code
+*.iml                   # IntelliJ IDEA module files
+*.ipr                   # IntelliJ IDEA project files
+*.iws                   # IntelliJ IDEA workspace files
+.project                # Eclipse
+.classpath              # Eclipse
+.settings/              # Eclipse
+*.sublime-project       # Sublime Text
+*.sublime-workspace     # Sublime Text
+*.komodoproject         # Komodo IDE
+*.kpf                   # Komodo IDE
+
+# Operating System Files
+# ======================
+.DS_Store               # macOS
+.Trashes                # macOS
+Thumbs.db               # Windows
+Desktop.ini             # Windows
+$RECYCLE.BIN/           # Windows
+
+# Logs
+*.log
+log/
+
+# Temporary Files
+*~
+*.swp
+.fuse_hidden*
+.nfs*
+*.tmp

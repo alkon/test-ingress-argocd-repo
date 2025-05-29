@@ -1,0 +1,46 @@
+# .github/workflows/deploy-argocd-app.yaml
+name: Deploy ArgoCD HTTP Ingress and Nginx App
+
+on:
+  push:
+    branches:
+      - main # Trigger on pushes to the main branch
+    paths:
+      - 'argocd-ingress/argocd-ingress-http-modified.yaml' # Corrected path
+      - 'argocd-apps/nginx-app.yaml'
+      - 'k8s-manifests/nginx/**' # Trigger if Nginx manifests change
+
+jobs:
+  deploy:
+    runs-on: self-hosted # Use your self-hosted GitHub Actions runner
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Kubeconfig
+      # IMPORTANT: Ensure your self-hosted runner has kubectl configured
+      # This step decodes a base64-encoded Kubeconfig secret and writes it
+      # to ~/.kube/config on the runner.
+      env:
+        KUBECONFIG_BASE64: ${{ secrets.KUBECONFIG_BASE64 }} # Your base64 encoded kubeconfig secret
+      run: |
+        mkdir -p ~/.kube
+        echo "$KUBECONFIG_BASE64" | base64 -d > ~/.kube/config
+        chmod 600 ~/.kube/config
+        echo "Kubeconfig has been set up on the runner."
+
+    - name: Apply Modified ArgoCD Ingress (HTTP)
+      # Assuming you will place argocd-ingress-http-modified.yaml in 'argocd-ingress/'
+      run: kubectl apply -f argocd-ingress/argocd-ingress-http-modified.yaml
+
+    - name: Apply ArgoCD Nginx Application
+      # This will create the ArgoCD Application resource.
+      # ArgoCD will then automatically sync and deploy the Nginx manifests
+      # from your repository to your cluster.
+      run: kubectl apply -f argocd-apps/nginx-app.yaml
+
+    - name: Verify ArgoCD Application Status
+      run: |
+        echo "Waiting for ArgoCD application 'nginx-test-app' to sync..."
+        kubectl wait --for=condition=Ready application/nginx-test-app -n argocd --timeout=5m
+        kubectl get application nginx-test-app -n argocd -o yaml

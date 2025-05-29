@@ -1,0 +1,21 @@
+# k8s-manifests/nginx/nginx-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+  namespace: argocd # Deploying in the same namespace as ArgoCD for simplicity
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:latest # A small, famous Docker image
+        ports:
+        - containerPort: 80

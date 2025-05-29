@@ -1,0 +1,21 @@
+# argocd-apps/nginx-app.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nginx-test-app
+  namespace: argocd # ArgoCD applications are typically defined in the argocd namespace
+spec:
+  project: default # Use the default ArgoCD project
+  source:
+    repoURL: https://github.com/alkon/test-ingress-argocd-repo.git # <--- IMPORTANT: Replace with your GitHub repo URL
+    targetRevision: main # HEAD or 'main' or 'master'
+    path: k8s-manifests/nginx # Path to your Nginx manifests within the repository
+  destination:
+    server: https://kubernetes.default.svc # The in-cluster Kubernetes API server
+    namespace: argocd # The namespace where Nginx will be deployed
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true # Automatically create the namespace if it doesn't exist
