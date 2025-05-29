@@ -6,7 +6,7 @@ on:
     branches:
       - main # Trigger on pushes to the main branch
     paths:
-      - 'argocd-ingress/argocd-ingress-http-modified.yaml' # Corrected path
+      - 'argocd-ingress/argocd-ingress-http.yaml' # Corrected path
       - 'argocd-apps/nginx-app.yaml'
       - 'k8s-manifests/nginx/**' # Trigger if Nginx manifests change
 
