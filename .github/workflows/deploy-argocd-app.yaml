@@ -6,10 +6,11 @@ on:
     branches:
       - main # Trigger on pushes to the main branch
     paths:
-      - 'argocd-ingress/**'           # Trigger on any change within the argocd-ingress directory
-      - 'argocd-apps/**'              # Trigger on any change within the argocd-apps directory
-      - 'k8s-manifests/nginx/**'      # Already using a glob, keeps as is
-      - '.github/workflows/**'        # Trigger on any change within the .github/workflows directory (includes this workflow file)
+      - 'argocd-ingress/**'
+#       - 'argocd-apps/**'              # This already covers nginx-oci-app.yaml
+      - 'argocd-apps/nginx-oci-app.yaml'
+      - 'k8s-manifests/nginx/**'
+      - '.github/workflows/**'
 
 jobs:
   deploy:
@@ -21,22 +22,32 @@ jobs:
     - name: Apply Modified ArgoCD Ingress (HTTP)
       run: kubectl apply -f argocd-ingress/argocd-ingress-http.yaml --validate=false
 
-    - name: Apply ArgoCD Nginx Application (Raw YAML)
-      run: kubectl apply -f argocd-apps/nginx-app.yaml --validate=false
+#    - name: Apply ArgoCD Nginx Application (Raw YAML)
+#      run: kubectl apply -f argocd-apps/nginx-app.yaml --validate=false
+#
+#    - name: Apply ArgoCD Nginx Helm Application (from Repo)
+#      run: kubectl apply -f argocd-apps/nginx-helm-app.yaml --validate=false
 
-    - name: Apply ArgoCD Nginx Helm Application
-      run: kubectl apply -f argocd-apps/nginx-helm-app.yaml --validate=false
+    - name: Apply ArgoCD Nginx OCI Helm Application # <--- ADD THIS NEW STEP
+      run: kubectl apply -f argocd-apps/nginx-oci-app.yaml --validate=false
 
-    - name: Verify ArgoCD Raw Nginx Application Status
+#    - name: Verify ArgoCD Raw Nginx Application Status
+#      run: |
+#        echo "Waiting for ArgoCD application 'nginx-test-app' to become Healthy..."
+#        kubectl wait --for=jsonpath='{.status.health.status}'=Healthy application/nginx-test-app -n argocd --timeout=5m
+#        echo "ArgoCD application 'nginx-test-app' is Healthy."
+#        kubectl get application nginx-test-app -n argocd -o yaml
+#
+#    - name: Verify ArgoCD Helm Nginx Application Status
+#      run: |
+#        echo "Waiting for ArgoCD application 'nginx-helm-app' to become Healthy..."
+#        kubectl wait --for=jsonpath='{.status.health.status}'=Healthy application/nginx-helm-app -n argocd --timeout=5m
+#        echo "ArgoCD application 'nginx-helm-app' is Healthy."
+#        kubectl get application nginx-helm-app -n argocd -o yaml
+
+    - name: Verify ArgoCD OCI Helm Nginx Application Status # <--- ADD THIS NEW STEP
       run: |
-        echo "Waiting for ArgoCD application 'nginx-test-app' to become Healthy..."
-        kubectl wait --for=jsonpath='{.status.health.status}'=Healthy application/nginx-test-app -n argocd --timeout=5m
-        echo "ArgoCD application 'nginx-test-app' is Healthy."
-        kubectl get application nginx-test-app -n argocd -o yaml
-
-    - name: Verify ArgoCD Helm Nginx Application Status
-      run: |
-        echo "Waiting for ArgoCD application 'nginx-helm-app' to become Healthy..."
-        kubectl wait --for=jsonpath='{.status.health.status}'=Healthy application/nginx-helm-app -n argocd --timeout=5m
-        echo "ArgoCD application 'nginx-helm-app' is Healthy."
-        kubectl get application nginx-helm-app -n argocd -o yaml
+        echo "Waiting for ArgoCD application 'nginx-oci-app' to become Healthy..."
+        kubectl wait --for=jsonpath='{.status.health.status}'=Healthy application/nginx-oci-app -n argocd --timeout=5m
+        echo "ArgoCD application 'nginx-oci-app' is Healthy."
+        kubectl get application nginx-oci-app -n argocd -o yaml
