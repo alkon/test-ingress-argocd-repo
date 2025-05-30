@@ -20,32 +20,45 @@ jobs:
         with:
           version: v3.14.0
 
-      - name: Helm Registry Login for GHCR (for runner to pull directly)
-        # This step logs the GitHub Actions runner into ghcr.io so it can directly pull OCI charts.
-        # This is needed for the 'helm pull' test step below.
-        # IMPORTANT: Ensure you have GHCR_USERNAME and GHCR_PAT secrets configured in your repository.
+      - name: Configure Docker Config for OCI Login
+        # This step decodes the DOCKER_CONFIG secret and places it
+        # into the standard Docker configuration file path (~/.docker/config.json).
+        # Helm (and Docker) will automatically use these credentials for OCI pulls.
+        # IMPORTANT: Ensure you have a 'DOCKER_CONFIG' secret in your repository
+        # containing the base64-encoded content of your ~/.docker/config.json
+        # which has the ghcr.io authentication entry.
+        env:
+          DOCKER_CONFIG_SECRET: ${{ secrets.DOCKER_CONFIG }}
         run: |
-          echo "Logging into ghcr.io..."
-          helm registry login -u ${{ secrets.GHCR_USERNAME }} -p ${{ secrets.GHCR_PAT }} ghcr.io
-          echo "Login complete."
+          echo "Configuring Docker config.json for OCI login..."
+          mkdir -p ~/.docker
+          echo "${DOCKER_CONFIG_SECRET}" | base64 -d > ~/.docker/config.json
+          chmod 600 ~/.docker/config.json # Set appropriate permissions for security
+          echo "Docker config.json configured."
 
       - name: Pull Helm Chart from OCI (Bitnami Nginx to runner's filesystem)
         # This step demonstrates and tests the runner's ability to pull the OCI Helm chart.
         # It pulls the .tgz file to the runner's local workspace.
-        # This is *not* the step that deploys the application to Kubernetes via ArgoCD.
-        # ArgoCD's repo-server does the pulling for the actual deployment.
+        # This is *not* the step that deploys the application to Kubernetes via ArgoCD;
+        # ArgoCD's repo-server handles the actual pulling for deployment.
         run: |
-          echo "Attempting to pull Bitnami Nginx chart to runner's local filesystem..."
+          echo "Attempting to pull Bitnami Nginx chart (version 20.0.4) to runner's local filesystem..."
           helm pull oci://ghcr.io/bitnami/charts/nginx --version 20.0.4 # Using a recent, known version
-          ls -l
+          ls -l # List files to confirm the .tgz was pulled
           echo "Helm chart pull step finished."
 
       - name: Apply ArgoCD Application for OCI Chart
         # This step deploys the ArgoCD Application resource that points to the OCI Helm chart.
-        # ArgoCD will then handle pulling and deploying the actual Nginx chart.
+        # ArgoCD will then handle pulling and deploying the actual Nginx chart to 'nginx-oci-app' namespace.
         run: |
-          echo "Applying nginx-oci-app.yaml..."
+          echo "Applying argocd-apps/nginx-oci-app.yaml..."
           kubectl apply -f argocd-apps/nginx-oci-app.yaml --validate=false
           echo "nginx-oci-app.yaml applied."
 
-      
+      - name: Apply ArgoCD Application for Raw Nginx YAML
+        # This step deploys the ArgoCD Application resource for your raw Nginx YAML.
+        # This application will deploy to the 'default' namespace.
+        run: |
+          echo "Applying argocd-apps/argocd-app.yaml..."
+          kubectl apply -f argocd-apps/argocd-app.yaml --validate=false
+          echo "argocd-app.yaml applied."
