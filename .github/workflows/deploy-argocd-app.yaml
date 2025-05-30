@@ -20,18 +20,25 @@ jobs:
         with:
           version: v3.14.0
 
-      - name: Configure Docker Config for OCI Login
-        # IMPORTANT: Ensure the 'DOCKER_CONFIG' secret exists in the repo
-        # It contains the base64-encoded content of your ~/.docker/config.json
-        # which has the registry-1.docker.io authentication entry.
-        env:
-          DOCKER_CONFIG_SECRET: ${{ secrets.DOCKER_CONFIG }}
-        run: |
-          echo "Configuring Docker config.json for OCI login..."
-          mkdir -p ~/.docker
-          echo "${DOCKER_CONFIG_SECRET}" | base64 -d > ~/.docker/config.json
-          chmod 600 ~/.docker/config.json # Set appropriate permissions for security
-          echo "Docker config.json configured."
+#      - name: Configure Docker Config for OCI Login
+#        # IMPORTANT: Ensure the 'DOCKER_CONFIG' secret exists in the repo
+#        # It contains the base64-encoded content of your ~/.docker/config.json
+#        # which has the registry-1.docker.io authentication entry.
+#        env:
+#          DOCKER_CONFIG_SECRET: ${{ secrets.DOCKER_CONFIG }}
+#        run: |
+#          echo "Configuring Docker config.json for OCI login..."
+#          mkdir -p ~/.docker
+#          echo "${DOCKER_CONFIG_SECRET}" | base64 -d > ~/.docker/config.json
+#          chmod 600 ~/.docker/config.json # Set appropriate permissions for security
+#          echo "Docker config.json configured."
+
+      - name: Login to Docker Hub (for Helm OCI)
+          uses: docker/login-action@v3
+          with:
+            registry: registry-1.docker.io
+            username: ${{ secrets.DOCKERHUB_USERNAME }}
+            password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Pull Helm Chart from OCI (Docker Hub)
         run: |
@@ -40,9 +47,20 @@ jobs:
           ls -l
           echo "Helm chart pull step finished."
 
-      - name: Apply ArgoCD Application for OCI Chart
-        # Deploy the ArgoCD Application resource that points to the OCI Helm chart.
-        run: |
-          echo "Applying argocd-apps/nginx-oci-app.yaml..."
-          kubectl apply -f argocd-apps/nginx-oci-app.yaml --validate=false
-          echo "nginx-oci-app.yaml applied."
+#      - name: Apply ArgoCD Application for OCI Chart
+#        # Deploy the ArgoCD Application resource that points to the OCI Helm chart.
+#        run: |
+#          echo "Applying argocd-apps/nginx-oci-app.yaml..."
+#          kubectl apply -f argocd-apps/nginx-oci-app.yaml --validate=false
+#          echo "nginx-oci-app.yaml applied."
+
+      - name: Deploy and Sync ArgoCD App from YAML
+              uses: jc21/argocd-deploy@v1.4.0
+              with:
+                server: ${{ secrets.ARGOCD_SERVER }}
+                token: ${{ secrets.ARGOCD_TOKEN }}
+                file: argocd-apps/nginx-oci-app.yaml
+                insecure: true
+                sync: true
+                waitSync: true
+                waitHealth: true
