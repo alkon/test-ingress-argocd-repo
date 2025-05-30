@@ -42,8 +42,8 @@ jobs:
         # This is *not* the step that deploys the application to Kubernetes via ArgoCD;
         # ArgoCD's repo-server handles the actual pulling for deployment.
         run: |
-          echo "Attempting to pull Bitnami Nginx chart (version 20.0.4) to runner's local filesystem..."
-          helm pull oci://ghcr.io/bitnami/charts/nginx --version 20.0.4 # Using a recent, known version
+          echo "Attempting to pull Bitnami Nginx chart (version 17.0.1) to runner's local filesystem..."
+          helm pull oci://ghcr.io/bitnami/charts/nginx --version 17.0.1 # Using a recent, known version
           ls -l # List files to confirm the .tgz was pulled
           echo "Helm chart pull step finished."
 
