@@ -7,7 +7,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: oci://registry-1.docker.io/bitnamicharts # <-- CHANGE REGISTRY HERE
+    repoURL: registry-1.docker.io/bitnamicharts # <-- CHANGE REGISTRY HERE
     chart: nginx
     targetRevision: 20.0.4 # <-- Ensure version matches
     helm:
