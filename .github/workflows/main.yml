@@ -1,0 +1,51 @@
+name: Deploy ArgoCD App (OCI & Raw YAML)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: # This line enables manual triggering from the GitHub UI
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.0
+
+      - name: Helm Registry Login for GHCR (for runner to pull directly)
+        # This step logs the GitHub Actions runner into ghcr.io so it can directly pull OCI charts.
+        # This is needed for the 'helm pull' test step below.
+        # IMPORTANT: Ensure you have GHCR_USERNAME and GHCR_PAT secrets configured in your repository.
+        run: |
+          echo "Logging into ghcr.io..."
+          helm registry login -u ${{ secrets.GHCR_USERNAME }} -p ${{ secrets.GHCR_PAT }} ghcr.io
+          echo "Login complete."
+
+      - name: Pull Helm Chart from OCI (Bitnami Nginx to runner's filesystem)
+        # This step demonstrates and tests the runner's ability to pull the OCI Helm chart.
+        # It pulls the .tgz file to the runner's local workspace.
+        # This is *not* the step that deploys the application to Kubernetes via ArgoCD.
+        # ArgoCD's repo-server does the pulling for the actual deployment.
+        run: |
+          echo "Attempting to pull Bitnami Nginx chart to runner's local filesystem..."
+          helm pull oci://ghcr.io/bitnami/charts/nginx --version 20.0.4 # Using a recent, known version
+          ls -l
+          echo "Helm chart pull step finished."
+
+      - name: Apply ArgoCD Application for OCI Chart
+        # This step deploys the ArgoCD Application resource that points to the OCI Helm chart.
+        # ArgoCD will then handle pulling and deploying the actual Nginx chart.
+        run: |
+          echo "Applying nginx-oci-app.yaml..."
+          kubectl apply -f argocd-apps/nginx-oci-app.yaml --validate=false
+          echo "nginx-oci-app.yaml applied."
+
+      
