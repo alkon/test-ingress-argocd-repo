@@ -1,53 +1,48 @@
-# .github/workflows/deploy-argocd-app.yaml
-name: Deploy ArgoCD HTTP Ingress and Nginx App
+name: Deploy ArgoCD App (OCI & Raw YAML)
 
 on:
   push:
     branches:
-      - main # Trigger on pushes to the main branch
-    paths:
-#      - 'argocd-ingress/**'
-#       - 'argocd-apps/**'              # This already covers nginx-oci-app.yaml
-      - 'argocd-apps/nginx-oci-app.yaml'
-      - 'k8s-manifests/nginx/**'
-      - '.github/workflows/**'
+      - main
+  workflow_dispatch: # Enables manual triggering from the GitHub UI
 
 jobs:
   deploy:
     runs-on: self-hosted
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-#    - name: Apply Modified ArgoCD Ingress (HTTP)
-#      run: kubectl apply -f argocd-ingress/argocd-ingress-http.yaml --validate=false
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.0
 
-#    - name: Apply ArgoCD Nginx Application (Raw YAML)
-#      run: kubectl apply -f argocd-apps/nginx-app.yaml --validate=false
-#
-#    - name: Apply ArgoCD Nginx Helm Application (from Repo)
-#      run: kubectl apply -f argocd-apps/nginx-helm-app.yaml --validate=false
+      - name: Configure Docker Config for OCI Login
+        # IMPORTANT: Ensure the 'DOCKER_CONFIG' secret exists in the repo
+        # It contains the base64-encoded content of your ~/.docker/config.json
+        # which has the registry-1.docker.io authentication entry.
+        env:
+          DOCKER_CONFIG_SECRET: ${{ secrets.DOCKER_CONFIG }}
+        run: |
+          echo "Configuring Docker config.json for OCI login..."
+          mkdir -p ~/.docker
+          echo "${DOCKER_CONFIG_SECRET}" | base64 -d > ~/.docker/config.json
+          chmod 600 ~/.docker/config.json # Set appropriate permissions for security
+          echo "Docker config.json configured."
 
-    - name: Apply ArgoCD Nginx OCI Helm Application # <--- ADD THIS NEW STEP
-      run: kubectl apply -f argocd-apps/nginx-oci-app.yaml --validate=false
+      - name: Pull Helm Chart from OCI (Docker Hub)
+        run: |
+          echo "Attempting to pull Bitnami Nginx chart (version 20.0.4) from Docker Hub OCI registry..."
+          helm pull oci://registry-1.docker.io/bitnamicharts/nginx --version 20.0.4 # <-- Uses Docker Hub OCI
+          ls -l
+          echo "Helm chart pull step finished."
 
-#    - name: Verify ArgoCD Raw Nginx Application Status
-#      run: |
-#        echo "Waiting for ArgoCD application 'nginx-test-app' to become Healthy..."
-#        kubectl wait --for=jsonpath='{.status.health.status}'=Healthy application/nginx-test-app -n argocd --timeout=5m
-#        echo "ArgoCD application 'nginx-test-app' is Healthy."
-#        kubectl get application nginx-test-app -n argocd -o yaml
-#
-#    - name: Verify ArgoCD Helm Nginx Application Status
-#      run: |
-#        echo "Waiting for ArgoCD application 'nginx-helm-app' to become Healthy..."
-#        kubectl wait --for=jsonpath='{.status.health.status}'=Healthy application/nginx-helm-app -n argocd --timeout=5m
-#        echo "ArgoCD application 'nginx-helm-app' is Healthy."
-#        kubectl get application nginx-helm-app -n argocd -o yaml
-
-    - name: Verify ArgoCD OCI Helm Nginx Application Status # <--- ADD THIS NEW STEP
-      run: |
-        echo "Waiting for ArgoCD application 'nginx-oci-app' to become Healthy..."
-        kubectl wait --for=jsonpath='{.status.health.status}'=Healthy application/nginx-oci-app -n argocd --timeout=5m
-        echo "ArgoCD application 'nginx-oci-app' is Healthy."
-        kubectl get application nginx-oci-app -n argocd -o yaml
+      - name: Apply ArgoCD Application for OCI Chart
+        # Deploy the ArgoCD Application resource that points to the OCI Helm chart.
+        run: |
+          echo "Applying argocd-apps/nginx-oci-app.yaml..."
+          kubectl apply -f argocd-apps/nginx-oci-app.yaml --validate=false
+          echo "nginx-oci-app.yaml applied."

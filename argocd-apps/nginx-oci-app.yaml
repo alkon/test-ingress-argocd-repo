@@ -2,34 +2,29 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: nginx-oci-app # A new, distinct application name for the OCI Helm deployment
-  namespace: argocd   # ArgoCD Application resources are typically in the argocd namespace
+  name: nginx-oci-app
+  namespace: argocd
 spec:
-  project: default    # Use the default ArgoCD project
+  project: default
   source:
-    # --- IMPORTANT CHANGES HERE FOR OCI ---
-    repoURL: oci://ghcr.io/bitnami/charts # OCI registry URL
-    chart: nginx                          # The name of the chart within that OCI path
-    targetRevision: 20.0.3                # The specific chart version (same as before)
+    repoURL: oci://registry-1.docker.io/bitnamicharts # <-- CHANGE REGISTRY HERE
+    chart: nginx
+    targetRevision: 20.0.4 # <-- Ensure version matches
     helm:
-      releaseName: nginx-oci-release      # Optional: specific Helm release name for the deployment
-      values: |                           # Optional: Override default chart values
+      releaseName: nginx-oci-release
+      values: |
         replicaCount: 1
         service:
           type: ClusterIP
           ports:
             - port: 80
               targetPort: http
-        # You can add other values like ingress if needed
-        # ingress:
-        #   enabled: true
-        #   hostname: nginx-oci.example.com
   destination:
-    server: https://kubernetes.default.svc # The in-cluster Kubernetes API server
-    namespace: nginx-oci-app # Deploy this OCI Helm chart into its own dedicated namespace
+    server: https://kubernetes.default.svc
+    namespace: nginx-oci-app
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
-    - CreateNamespace=true # Automatically create the destination namespace if it doesn't exist
+    - CreateNamespace=true
