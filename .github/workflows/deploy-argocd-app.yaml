@@ -1,9 +1,9 @@
 name: Deploy ArgoCD App (OCI & Raw YAML)
 
 on:
-  push:
-    branches:
-      - main
+#  push:
+#    branches:
+#      - main
   workflow_dispatch: # Enables manual triggering from the GitHub UI
 
 jobs:
