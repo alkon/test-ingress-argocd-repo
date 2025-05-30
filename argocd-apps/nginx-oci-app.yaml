@@ -17,8 +17,8 @@ spec:
         service:
           type: ClusterIP
           ports:
-            - port: 80
-              targetPort: http
+            http: 80
+            https: 443
   destination:
     server: https://kubernetes.default.svc
     namespace: nginx-oci-app
