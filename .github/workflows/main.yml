@@ -50,11 +50,4 @@ jobs:
           echo "Applying argocd-apps/nginx-oci-app.yaml..."
           kubectl apply -f argocd-apps/nginx-oci-app.yaml --validate=false
           echo "nginx-oci-app.yaml applied."
-
-      - name: Apply ArgoCD Application for Raw Nginx YAML
-        # This step deploys the ArgoCD Application resource for your raw Nginx YAML.
-        # This application will deploy to the 'default' namespace.
-        run: |
-          echo "Applying argocd-apps/argocd-app.yaml..."
-          kubectl apply -f argocd-apps/argocd-app.yaml --validate=false
-          echo "argocd-app.yaml applied."
+     
