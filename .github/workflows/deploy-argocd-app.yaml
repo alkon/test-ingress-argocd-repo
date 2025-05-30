@@ -6,7 +6,7 @@ on:
     branches:
       - main # Trigger on pushes to the main branch
     paths:
-      - 'argocd-ingress/**'
+#      - 'argocd-ingress/**'
 #       - 'argocd-apps/**'              # This already covers nginx-oci-app.yaml
       - 'argocd-apps/nginx-oci-app.yaml'
       - 'k8s-manifests/nginx/**'
@@ -19,8 +19,8 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Apply Modified ArgoCD Ingress (HTTP)
-      run: kubectl apply -f argocd-ingress/argocd-ingress-http.yaml --validate=false
+#    - name: Apply Modified ArgoCD Ingress (HTTP)
+#      run: kubectl apply -f argocd-ingress/argocd-ingress-http.yaml --validate=false
 
 #    - name: Apply ArgoCD Nginx Application (Raw YAML)
 #      run: kubectl apply -f argocd-apps/nginx-app.yaml --validate=false
