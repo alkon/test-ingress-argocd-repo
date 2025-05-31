@@ -90,18 +90,12 @@ jobs:
           run: |
             kubectl apply -f argocd-apps/hello-chart-app.yaml
 
-        # - name: Login to Argo CD
-        #   run: |
-        #     argocd login ${{ secrets.ARGOCD_SERVER }} \
-        #       --insecure --grpc-web \
-        #       --auth-token ${{ secrets.ARGOCD_TOKEN }}
-
-        - name: Login to ArgoCD
-          uses: clowdhaus/argo-cd-action@v2
-          with:
-            version: v2.13.3
-            command: login ${{ secrets.ARGOCD_SERVER }} --insecure --grpc-web --auth-token ${{ secrets.ARGOCD_TOKEN }}
-
+        - name: Login to Argo CD
+          run: |
+            argocd login ${{ secrets.ARGOCD_SERVER }} \
+              --insecure --grpc-web \
+              --auth-token ${{ secrets.ARGOCD_TOKEN }} \
+              --plaintext
 
         - name: Sync Application
           run: argocd app sync hello-chart-app --grpc-web
