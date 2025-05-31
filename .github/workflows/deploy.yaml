@@ -1,4 +1,7 @@
 name: Deploy ArgoCD App (OCI)
+permissions:
+  actions: read
+  contents: read
 
 on:
   workflow_dispatch:
@@ -25,6 +28,8 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: chart-version
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
 
       - name: Prepare Application Manifest from Template
         run: |
