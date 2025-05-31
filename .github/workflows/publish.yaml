@@ -53,25 +53,15 @@ jobs:
 #          registry-url: oci://registry-1.docker.io/${{ secrets.DOCKERHUB_USERNAME }}
 #          chart-folder: ./helm/hello-chart
 
-#      - name: Package & Push Helm Chart to Docker Hub OCI (macOS compatible)
-#        run: |
-#          echo "${{ secrets.DOCKERHUB_TOKEN }}" | helm registry login registry-1.docker.io \
-#            --username ${{ secrets.DOCKERHUB_USERNAME }} \
-#            --password-stdin
-#
-#          helm package ./helm/hello-chart
-#          helm push hello-chart-0.1.0.tgz oci://registry-1.docker.io/${{ secrets.DOCKERHUB_USERNAME }}
-
-
-# Note: awk grabs the generated .tgz filename (last word of the Helm output)
-- name: Package & Push Helm Chart to Docker Hub OCI (auto version)
-  run: |
-    echo "${{ secrets.DOCKERHUB_TOKEN }}" | helm registry login registry-1.docker.io \
-      --username ${{ secrets.DOCKERHUB_USERNAME }} \
-      --password-stdin
-
-    CHART_DIR="./helm/hello-chart"
-    CHART_PACKAGE=$(helm package "$CHART_DIR" --destination . | awk '{print $NF}')
-    helm push "$CHART_PACKAGE" oci://registry-1.docker.io/${{ secrets.DOCKERHUB_USERNAME }}
+      # Note: awk grabs the generated .tgz filename (last word of the Helm output)
+      - name: Package & Push Helm Chart to Docker Hub OCI (auto version)
+        run: |
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | helm registry login registry-1.docker.io \
+            --username ${{ secrets.DOCKERHUB_USERNAME }} \
+            --password-stdin
+      
+          CHART_DIR="./helm/hello-chart"
+          CHART_PACKAGE=$(helm package "$CHART_DIR" --destination . | awk '{print $NF}')
+          helm push "$CHART_PACKAGE" oci://registry-1.docker.io/${{ secrets.DOCKERHUB_USERNAME }}
 
 
