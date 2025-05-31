@@ -9,8 +9,8 @@ on:
 jobs:
   build-and-publish:
     runs-on: self-hosted
-    outputs:
-      chart-version: ${{ steps.set-version.outputs.chart-version }}
+#    outputs:
+#      chart-version: ${{ steps.set-version.outputs.chart-version }}
 
     steps:
       - name: Checkout Code
@@ -21,11 +21,6 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-#      - name: Build and Push Docker Image to Docker Hub
-#        run: |
-#          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/hello-world:latest ./app
-#          docker push ${{ secrets.DOCKERHUB_USERNAME }}/hello-world:latest
 
       - name: Build and Push Docker Image to Docker Hub
         uses: docker/build-push-action@v5
@@ -56,21 +51,6 @@ jobs:
         with:
           version: v3.14.0
 
-
-      # Imporatnt! Runs on Linux only (not macOs)
-      # 1. Logs in to the OCI registry
-      # 2. Runs helm package
-      # 3. Runs helm push
-
-#      - name: Push Helm Chart to Docker Hub OCI
-#        uses: bsord/helm-push@v4
-#        with:
-#          useOCI: true
-#          username: ${{ secrets.DOCKERHUB_USERNAME }}
-#          password: ${{ secrets.DOCKERHUB_TOKEN }}
-#          registry-url: oci://registry-1.docker.io/${{ secrets.DOCKERHUB_USERNAME }}
-#          chart-folder: ./helm/hello-chart
-
       # Note: awk grabs the generated .tgz filename (last word of the Helm output)
       - name: Package & Push Helm Chart to Docker Hub OCI (auto version)
         run: |
@@ -89,6 +69,13 @@ jobs:
       steps:
         - name: Checkout code
           uses: actions/checkout@v4
+
+        # Download chart version
+        - name: Download Chart Version Artifact
+          uses: actions/download-artifact@v4
+          with:
+            name: chart-version
+            path: .
 
         - name: Prepare Application Manifest
           run: |
