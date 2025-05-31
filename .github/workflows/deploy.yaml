@@ -23,9 +23,9 @@ jobs:
           version: v3.14.0
 
       - name: Download chart version
-          uses: actions/download-artifact@v4
-          with:
-            name: chart-version
+        uses: actions/download-artifact@v4
+        with:
+          name: chart-version
 
       - name: Read chart version
         id: read_version
