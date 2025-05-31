@@ -34,19 +34,6 @@ jobs:
           export DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
           envsubst < argocd-apps/hello-chart-app.yaml.template > argocd-apps/hello-chart-app.yaml
 
-#      - name: (Optional) Login to Docker Hub (for Helm OCI)
-#        uses: docker/login-action@v3
-#        with:
-#          registry: registry-1.docker.io
-#          username: ${{ secrets.DOCKERHUB_USERNAME }}
-#          password: ${{ secrets.DOCKERHUB_TOKEN }}
-#
-#      - name: (Optional) Pull Helm Chart from OCI for Verification
-#        run: |
-#          CHART_VERSION=$(cat chart-version.txt)
-#          helm pull oci://registry-1.docker.io/${{ secrets.DOCKERHUB_USERNAME }}/hello-chart --version $CHART_VERSION
-#        continue-on-error: true
-
       - name: Apply ArgoCD Application
         run: |
           kubectl apply -f argocd-apps/hello-chart-app.yaml
