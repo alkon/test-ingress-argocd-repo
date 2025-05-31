@@ -9,6 +9,8 @@ on:
 jobs:
   build-and-publish:
     runs-on: self-hosted
+    outputs:
+      chart-version: ${{ steps.set-version.outputs.chart-version }}
 
     steps:
       - name: Checkout Code
@@ -80,4 +82,32 @@ jobs:
           CHART_PACKAGE=$(helm package "$CHART_DIR" --destination . | awk '{print $NF}')
           helm push "$CHART_PACKAGE" oci://registry-1.docker.io/${{ secrets.DOCKERHUB_USERNAME }}
 
+  deploy:
+      runs-on: self-hosted
+      needs: build-and-publish
 
+      steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+
+        - name: Prepare Application Manifest
+          run: |
+            export CHART_VERSION=${{ needs.build-and-publish.outputs.chart-version }}
+            export DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+            envsubst < argocd-apps/hello-chart-app.yaml.template > argocd-apps/hello-chart-app.yaml
+
+        - name: Apply ArgoCD Application
+          run: |
+            kubectl apply -f argocd-apps/hello-chart-app.yaml
+
+        - name: Login to Argo CD
+          run: |
+            argocd login ${{ secrets.ARGOCD_SERVER }} \
+              --insecure --grpc-web \
+              --auth-token ${{ secrets.ARGOCD_TOKEN }}
+
+        - name: Sync Application
+          run: argocd app sync hello-chart-app --grpc-web
+
+        - name: Wait for Health
+          run: argocd app wait hello-chart-app --health --operation --timeout 90s --grpc-web
