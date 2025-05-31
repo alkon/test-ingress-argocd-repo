@@ -20,21 +20,42 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build Docker Image
-        run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/hello-world:latest ./app
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/hello-world:latest
+#      - name: Build Docker Image
+#        run: |
+#          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/hello-world:latest ./app
+#          docker push ${{ secrets.DOCKERHUB_USERNAME }}/hello-world:latest
+
+      - name: Build and Push Docker Image to Docker Hub
+        uses: docker/build-push-action@v5
+        with:
+          context: ./app
+          file: ./app/Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/hello-world:latest
 
       - name: Set up Helm
         uses: azure/setup-helm@v4
         with:
           version: v3.14.0
 
-      - name: Enable Helm OCI and Save Chart
-        run: |
-          helm registry login registry-1.docker.io \
-            -u ${{ secrets.DOCKERHUB_USERNAME }} \
-            -p ${{ secrets.DOCKERHUB_TOKEN }}
+      # 1. Logs in to the OCI registry
+      # 2. Runs helm package
+      # 3. Runs helm push
+      - name: Push Helm Chart to Docker Hub OCI
+        uses: bsord/helm-push@v4
+        with:
+          useOCI: true
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry-url: oci://registry-1.docker.io/${{ secrets.DOCKERHUB_USERNAME }}
+          chart-folder: ./helm/hello-chart
 
-          helm package ./helm/hello-chart
-          helm push hello-chart-0.1.0.tgz oci://registry-1.docker.io/${{ secrets.DOCKERHUB_USERNAME }}
+
+#      - name: Enable Helm OCI and Save Chart
+#        run: |
+#          helm registry login registry-1.docker.io \
+#            -u ${{ secrets.DOCKERHUB_USERNAME }} \
+#            -p ${{ secrets.DOCKERHUB_TOKEN }}
+#
+#          helm package ./helm/hello-chart
+#          helm push hello-chart-0.1.0.tgz oci://registry-1.docker.io/${{ secrets.DOCKERHUB_USERNAME }}
