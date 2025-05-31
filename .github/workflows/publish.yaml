@@ -37,6 +37,7 @@ jobs:
         id: chart
         run: |
           VERSION=$(grep '^version:' ./helm/hello-chart/Chart.yaml | cut -d ':' -f2 | xargs)
+          echo "Chart version detected: $VERSION"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo $VERSION > chart-version.txt
 

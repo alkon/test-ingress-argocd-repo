@@ -9,10 +9,11 @@ on:
 
 jobs:
   deploy:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    if: github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch'
     runs-on: self-hosted
+
     steps:
-      - name: Checkout
+      - name: Checkout Repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -22,35 +23,34 @@ jobs:
         with:
           version: v3.14.0
 
-      - name: Download chart version
+      - name: Download Chart Version Artifact
         uses: actions/download-artifact@v4
         with:
           name: chart-version
 
-      - name: Read chart version
-        id: read_version
-        run: echo "CHART_VERSION=$(cat chart-version.txt)" >> $GITHUB_ENV
-
-      - name: Login to Docker Hub (for Helm OCI)
-        uses: docker/login-action@v3
-        with:
-          registry: registry-1.docker.io
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Pull Helm Chart from OCI (Docker Hub)
+      - name: Prepare Application Manifest from Template
         run: |
-          echo "Pulling hello-chart from Docker Hub OCI..."
-          helm pull oci://registry-1.docker.io/${{ secrets.DOCKERHUB_USERNAME }}/hello-chart --version $CHART_VERSION
-          ls -l
+          CHART_VERSION=$(cat chart-version.txt)
+          export CHART_VERSION
+          export DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+          envsubst < argocd-apps/hello-chart-app.yaml.template > argocd-apps/hello-chart-app.yaml
 
-      - name: Deploy and Sync ArgoCD App from YAML
-        uses: jc21/argocd-deploy@v1.4.0
+      - name: Apply ArgoCD Application
+        run: |
+          kubectl apply -f argocd-apps/hello-chart-app.yaml
+
+      - name: Sync ArgoCD App
+        uses: argoproj/argo-cd-action@v0.1.0
         with:
-          server: ${{ secrets.ARGOCD_SERVER }}
-          token: ${{ secrets.ARGOCD_TOKEN }}
-          file: argocd-apps/hello-chart-app.yaml
-          insecure: true
-          sync: true
-          waitSync: true
-          waitHealth: true
+          args: app sync hello-chart-app --grpc-web
+        env:
+          ARGOCD_SERVER: ${{ secrets.ARGOCD_SERVER }}
+          ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_TOKEN }}
+
+      - name: Wait for ArgoCD App to be Healthy
+        uses: argoproj/argo-cd-action@v0.1.0
+        with:
+          args: app wait hello-chart-app --operation --health --timeout 90s --grpc-web
+        env:
+          ARGOCD_SERVER: ${{ secrets.ARGOCD_SERVER }}
+          ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_TOKEN }}

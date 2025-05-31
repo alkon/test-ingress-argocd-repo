@@ -1,0 +1,23 @@
+# argocd-apps/hello-chart-app.yaml.template
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: hello-chart-app
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: oci://registry-1.docker.io/${DOCKERHUB_USERNAME}
+    chart: hello-chart
+    targetRevision: ${CHART_VERSION}
+    helm:
+      releaseName: hello-chart-release
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: hello-chart
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
