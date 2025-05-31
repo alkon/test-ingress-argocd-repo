@@ -1,0 +1,102 @@
+name: Publish Python App & Helm Chart
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-and-publish:
+    runs-on: self-hosted
+#    outputs:
+#      chart-version: ${{ steps.set-version.outputs.chart-version }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and Push Docker Image to Docker Hub
+        uses: docker/build-push-action@v5
+        with:
+          context: ./app
+          file: ./app/Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/hello-world:latest
+
+      - name: Extract Chart Version
+        id: chart
+        run: |
+          VERSION=$(grep '^version:' ./helm/hello-chart/Chart.yaml | cut -d ':' -f2 | xargs)
+          echo "Chart version detected: $VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo $VERSION > chart-version.txt
+
+      # Store chart version to be used in other isolated workflow (i.e deploy)
+      - name: Upload Chart Version Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chart-version
+          path: chart-version.txt
+
+      # Config Helm
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.0
+
+      # Note: awk grabs the generated .tgz filename (last word of the Helm output)
+      - name: Package & Push Helm Chart to Docker Hub OCI (auto version)
+        run: |
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | helm registry login registry-1.docker.io \
+            --username ${{ secrets.DOCKERHUB_USERNAME }} \
+            --password-stdin
+      
+          CHART_DIR="./helm/hello-chart"
+          CHART_PACKAGE=$(helm package "$CHART_DIR" --destination . | awk '{print $NF}')
+          helm push "$CHART_PACKAGE" oci://registry-1.docker.io/${{ secrets.DOCKERHUB_USERNAME }}
+
+  deploy:
+      runs-on: self-hosted
+      needs: build-and-publish
+
+      steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+
+        - name: Download Chart Version Artifact
+          uses: actions/download-artifact@v4
+          with:
+            name: chart-version
+            path: .
+
+        - name: Prepare Application Manifest
+          run: |
+            CHART_VERSION=$(cat chart-version.txt)
+            DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+
+            sed -e "s|\${CHART_VERSION}|$CHART_VERSION|g" \
+                -e "s|\${DOCKERHUB_USERNAME}|$DOCKERHUB_USERNAME|g" \
+                argocd-apps/hello-chart-app.yaml.template > argocd-apps/hello-chart-app.yaml
+
+        - name: Apply ArgoCD Application
+          run: |
+            kubectl apply -f argocd-apps/hello-chart-app.yaml
+
+        - name: Login to Argo CD
+          run: |
+            argocd login ${{ secrets.ARGOCD_SERVER }} \
+              --insecure --grpc-web \
+              --auth-token ${{ secrets.ARGOCD_TOKEN }}
+
+        - name: Sync Application
+          run: argocd app sync hello-chart-app --grpc-web
+
+        - name: Wait for Health
+          run: argocd app wait hello-chart-app --health --operation --timeout 90s --grpc-web
