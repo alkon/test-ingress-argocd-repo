@@ -92,9 +92,12 @@ jobs:
 
         - name: Prepare Application Manifest
           run: |
-            export CHART_VERSION=${{ needs.build-and-publish.outputs.chart-version }}
-            export DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
-            envsubst < argocd-apps/hello-chart-app.yaml.template > argocd-apps/hello-chart-app.yaml
+            CHART_VERSION=$(cat chart-version.txt)
+            DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+
+            sed -e "s|\${CHART_VERSION}|$CHART_VERSION|g" \
+                -e "s|\${DOCKERHUB_USERNAME}|$DOCKERHUB_USERNAME|g" \
+                argocd-apps/hello-chart-app.yaml.template > argocd-apps/hello-chart-app.yaml
 
         - name: Apply ArgoCD Application
           run: |
