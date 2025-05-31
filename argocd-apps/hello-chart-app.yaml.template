@@ -7,7 +7,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: oci://registry-1.docker.io/${DOCKERHUB_USERNAME}
+    repoURL: registry-1.docker.io/${DOCKERHUB_USERNAME}
     chart: hello-chart
     targetRevision: ${CHART_VERSION}
     helm:
