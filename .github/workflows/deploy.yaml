@@ -38,20 +38,17 @@ jobs:
         run: |
           kubectl apply -f argocd-apps/hello-chart-app.yaml
 
-      - name: Login to ArgoCD
-        uses: clowdhaus/argo-cd-action@v2
-        with:
-          version: v2.13.3
-          command: login ${{ secrets.ARGOCD_SERVER }} --insecure --grpc-web --auth-token ${{ secrets.ARGOCD_TOKEN }}
+      - name: Login to Argo CD
+        run: |
+          argocd login ${{ secrets.ARGOCD_SERVER }} \
+            --insecure \
+            --grpc-web \
+            --auth-token ${{ secrets.ARGOCD_TOKEN }}
 
-      - name: Sync ArgoCD Application
-        uses: clowdhaus/argo-cd-action@v2
-        with:
-          version: v2.13.3
-          command: app sync hello-chart-app --grpc-web
+      - name: Sync Application
+        run: |
+          argocd app sync hello-chart-app --grpc-web
 
-      - name: Wait for Application to be Healthy
-        uses: clowdhaus/argo-cd-action@v2
-        with:
-          version: v2.13.3
-          command: app wait hello-chart-app --health --operation --timeout 90s --grpc-web
+      - name: Wait for Health
+        run: |
+          argocd app wait hello-chart-app --health --operation --timeout 90s --grpc-web
