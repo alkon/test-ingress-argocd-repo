@@ -36,7 +36,7 @@ jobs:
       - name: Extract Chart Version
         id: chart
         run: |
-          VERSION=$(yq .version ./helm/hello-chart/Chart.yaml)
+          VERSION=$(grep '^version:' ./helm/hello-chart/Chart.yaml | cut -d ':' -f2 | xargs)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo $VERSION > chart-version.txt
 
