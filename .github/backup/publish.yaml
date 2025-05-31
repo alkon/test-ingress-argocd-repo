@@ -70,6 +70,7 @@ jobs:
         - name: Checkout code
           uses: actions/checkout@v4
 
+        # Download chart version
         - name: Download Chart Version Artifact
           uses: actions/download-artifact@v4
           with:
