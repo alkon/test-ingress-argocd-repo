@@ -1,4 +1,4 @@
-name: Deploy ArgoCD App (OCI & Raw YAML)
+name: Deploy ArgoCD App (OCI)
 
 on:
 #  push:

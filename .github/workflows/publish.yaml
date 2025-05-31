@@ -20,7 +20,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-#      - name: Build Docker Image
+#      - name: Build and Push Docker Image to Docker Hub
 #        run: |
 #          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/hello-world:latest ./app
 #          docker push ${{ secrets.DOCKERHUB_USERNAME }}/hello-world:latest
@@ -33,13 +33,28 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/hello-world:latest
 
+      - name: Extract Chart Version
+        id: chart
+        run: |
+          VERSION=$(yq .version ./helm/hello-chart/Chart.yaml)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo $VERSION > chart-version.txt
+
+      # Store chart version to be used in other isolated workflow (i.e deploy)
+      - name: Upload Chart Version Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chart-version
+          path: chart-version.txt
+
+      # Config Helm
       - name: Set up Helm
         uses: azure/setup-helm@v4
         with:
           version: v3.14.0
 
 
-      # Imporatnt! Runs on Linux (not macOs) only
+      # Imporatnt! Runs on Linux only (not macOs)
       # 1. Logs in to the OCI registry
       # 2. Runs helm package
       # 3. Runs helm push
