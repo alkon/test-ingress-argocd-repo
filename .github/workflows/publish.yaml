@@ -112,13 +112,13 @@ jobs:
       # This 'Login to Argo CD' step needs to be correctly indented and placed.
       # It was previously at the same level as the 'run' command for 'Apply ArgoCD Application'.
       # Also, the '--insecure' and '--grpc-web' flags should be consistent with the other argocd login.
-      - name: Login to Argo CD
-        run: |
-          argocd login ${{ secrets.ARGOCD_SERVER }} \
-            --username admin \
-            --password ${{ secrets.ARGOCD_PASSWORD }} \
-            --insecure \
-            --grpc-web
+#      - name: Login to Argo CD
+#        run: |
+#          argocd login ${{ secrets.ARGOCD_SERVER }} \
+#            --username admin \
+#            --password ${{ secrets.ARGOCD_PASSWORD }} \
+#            --insecure \
+#            --grpc-web
 
       # --- START Workaround: Establish Port-Forwarding Tunnel ---
       - name: Start ArgoCD Ingress Port Forward
