@@ -89,13 +89,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Download chart version
-      - name: Download Chart Version Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: chart-version
-          path: .
-
       - name: Prepare Application Manifest
         run: |
           CHART_VERSION=$(cat chart-version.txt)
@@ -109,23 +102,10 @@ jobs:
         run: |
           kubectl apply -f argocd-apps/hello-chart-app.yaml
 
-      # This 'Login to Argo CD' step needs to be correctly indented and placed.
-      # It was previously at the same level as the 'run' command for 'Apply ArgoCD Application'.
-      # Also, the '--insecure' and '--grpc-web' flags should be consistent with the other argocd login.
-#      - name: Login to Argo CD
-#        run: |
-#          argocd login ${{ secrets.ARGOCD_SERVER }} \
-#            --username admin \
-#            --password ${{ secrets.ARGOCD_PASSWORD }} \
-#            --insecure \
-#            --grpc-web
-
       # --- START Workaround: Establish Port-Forwarding Tunnel ---
       - name: Start ArgoCD Ingress Port Forward
-        id: start_port_forward # Give this step an ID to reference its outputs
+        id: start_port_forward
         run: |
-          # Get the NGINX Ingress Controller pod name
-          # Use a more robust way to get the pod name in case there are multiple
           NGINX_POD=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/name=nginx-ingress-controller -o jsonpath='{.items[0].metadata.name}')
 
           if [ -z "$NGINX_POD" ]; then
@@ -135,45 +115,55 @@ jobs:
 
           echo "Found NGINX Ingress Controller Pod: $NGINX_POD"
 
-          # Start port-forwarding to the NGINX Ingress Controller's HTTPS port (443)
-          # using local port 8443. Run in background.
+          # Start port-forwarding in background
           kubectl port-forward -n ingress-nginx "$NGINX_POD" 8443:443 &
-          PF_PID=$! # Store the process ID of the background job
-
+          PF_PID=$!
           echo "Port-forwarding started for NGINX Ingress Controller on localhost:8443 (PID: $PF_PID)"
-          # Export the PID as an environment variable to be available in subsequent steps for cleanup
-          echo "PF_PID=$PF_PID" >> "$GITHUB_ENV" # Quoted $GITHUB_ENV for robustness
+          echo "PF_PID=$PF_PID" >> "$GITHUB_ENV"
 
-          # Wait a moment for the tunnel to establish. 10 seconds is usually safe.
-          sleep 10
-          echo "Port-forwarding tunnel established."
-        timeout-minutes: 1 # This is an option for the step, so it should be at the same level as 'run' and 'id'.
+          # --- Robust Wait Loop for Port-Forwarding ---
+          echo "Waiting for port-forwarding tunnel to be ready..."
+          timeout=60 # Max wait time in seconds
+          elapsed=0
+          while ! nc -z localhost 8443 >/dev/null 2>&1; do
+            if [ $elapsed -ge $timeout ]; then
+              echo "Error: Port-forwarding tunnel did not become ready within $timeout seconds."
+              kill "$PF_PID" || true # Try to kill if it's still running
+              exit 1
+            fi
+            echo "Port 8443 not yet open. Waiting..."
+            sleep 5
+            elapsed=$((elapsed + 5))
+          done
+          echo "Port-forwarding tunnel established and ready."
+        timeout-minutes: 2 # Increase timeout for this step to accommodate the wait loop
 
       # --- Use the Tunnel for Argo CD Commands ---
       - name: Login to Argo CD via Port Forward
         run: |
-          # ARGOCD_SERVER is now hardcoded to the local tunnel endpoint
-          argocd login localhost:8443 \
+          yes | argocd login localhost:8443 \
             --insecure --grpc-web \
             --auth-token ${{ secrets.ARGOCD_TOKEN }}
 
-      - name: Sync Application # This step was incorrectly indented, it should be at the same level as the previous steps.
+      - name: Sync Application via Port Forward
         run: argocd app sync hello-chart-app --grpc-web
 
-      - name: Wait for Health # This step was incorrectly indented.
+      - name: Wait for Health via Port Forward
         run: argocd app wait hello-chart-app --health --operation --timeout 90s --grpc-web
 
       # --- END Workaround: Clean Up Port-Forwarding Tunnel ---
       - name: Stop ArgoCD Ingress Port Forward
-        # Use 'if: always()' to ensure this step runs even if previous steps fail,
-        # which is critical for cleaning up background processes.
         if: always()
         run: |
-          # Retrieve the PID from the environment variable set earlier
           if [ -n "$PF_PID" ]; then
             echo "Stopping port-forwarding process (PID: $PF_PID)..."
-            kill "$PF_PID"
-            echo "Port-forwarding stopped."
+            # Use 'kill -0' to check if process exists before attempting to kill
+            if kill -0 "$PF_PID" >/dev/null 2>&1; then
+              kill "$PF_PID"
+              echo "Port-forwarding stopped."
+            else
+              echo "Port-forwarding process (PID: $PF_PID) already terminated."
+            fi
           else
             echo "No port-forwarding process PID found, skipping termination."
           fi
