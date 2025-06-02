@@ -9,8 +9,8 @@ on:
 jobs:
   build-and-publish:
     runs-on: self-hosted
-#    outputs:
-#      chart-version: ${{ steps.set-version.outputs.chart-version }}
+    #    outputs: # This section is commented out, so its indentation doesn't matter much,
+    #      chart-version: ${{ steps.set-version.outputs.chart-version }} # but if uncommented, ensure it aligns with 'outputs:'
 
     steps:
       - name: Checkout Code
@@ -22,10 +22,10 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-#      - name: Build and Push Docker Image to Docker Hub
-#        run: |
-#          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/hello-world:latest ./app
-#          docker push ${{ secrets.DOCKERHUB_USERNAME }}/hello-world:latest
+      #      - name: Build and Push Docker Image to Docker Hub # This block was commented out, leaving it as is.
+      #        run: |
+      #          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/hello-world:latest ./app
+      #          docker push ${{ secrets.DOCKERHUB_USERNAME }}/hello-world:latest
 
       - name: Build and Push Docker Image to Docker Hub
         uses: docker/build-push-action@v5
@@ -41,7 +41,7 @@ jobs:
           VERSION=$(grep '^version:' ./helm/hello-chart/Chart.yaml | cut -d ':' -f2 | xargs)
           echo "Chart version detected: $VERSION"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo $VERSION > chart-version.txt
+          echo "$VERSION" > chart-version.txt # Added quotes around $VERSION for robustness
 
       # Store chart version to be used in other isolated workflow (i.e deploy)
       - name: Upload Chart Version Artifact
@@ -56,20 +56,19 @@ jobs:
         with:
           version: v3.14.0
 
-
       # Imporatnt! Runs on Linux only (not macOs)
       # 1. Logs in to the OCI registry
       # 2. Runs helm package
       # 3. Runs helm push
 
-#      - name: Push Helm Chart to Docker Hub OCI
-#        uses: bsord/helm-push@v4
-#        with:
-#          useOCI: true
-#          username: ${{ secrets.DOCKERHUB_USERNAME }}
-#          password: ${{ secrets.DOCKERHUB_TOKEN }}
-#          registry-url: oci://registry-1.docker.io/${{ secrets.DOCKERHUB_USERNAME }}
-#          chart-folder: ./helm/hello-chart
+      #      - name: Push Helm Chart to Docker Hub OCI # This block was commented out, leaving it as is.
+      #        uses: bsord/helm-push@v4
+      #        with:
+      #          useOCI: true
+      #          username: ${{ secrets.DOCKERHUB_USERNAME }}
+      #          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      #          registry-url: oci://registry-1.docker.io/${{ secrets.DOCKERHUB_USERNAME }}
+      #          chart-folder: ./helm/hello-chart
 
       # Note: awk grabs the generated .tgz filename (last word of the Helm output)
       - name: Package & Push Helm Chart to Docker Hub OCI (auto version)
@@ -77,46 +76,50 @@ jobs:
           echo "${{ secrets.DOCKERHUB_TOKEN }}" | helm registry login registry-1.docker.io \
             --username ${{ secrets.DOCKERHUB_USERNAME }} \
             --password-stdin
-      
+
           CHART_DIR="./helm/hello-chart"
           CHART_PACKAGE=$(helm package "$CHART_DIR" --destination . | awk '{print $NF}')
-          helm push "$CHART_PACKAGE" oci://registry-1.docker.io/${{ secrets.DOCKERHUB_USERNAME }}
+          helm push "$CHART_PACKAGE" "oci://registry-1.docker.io/${{ secrets.DOCKERHUB_USERNAME }}" # Added quotes around OCI URL for robustness
 
   deploy:
-      runs-on: self-hosted
-      needs: build-and-publish
+    runs-on: self-hosted
+    needs: build-and-publish
 
-      steps:
-        - name: Checkout code
-          uses: actions/checkout@v4
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-        # Download chart version
-        - name: Download Chart Version Artifact
-          uses: actions/download-artifact@v4
-          with:
-            name: chart-version
-            path: .
+      # Download chart version
+      - name: Download Chart Version Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: chart-version
+          path: .
 
-        - name: Prepare Application Manifest
-          run: |
-            CHART_VERSION=$(cat chart-version.txt)
-            DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+      - name: Prepare Application Manifest
+        run: |
+          CHART_VERSION=$(cat chart-version.txt)
+          DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
 
-            sed -e "s|\${CHART_VERSION}|$CHART_VERSION|g" \
-                -e "s|\${DOCKERHUB_USERNAME}|$DOCKERHUB_USERNAME|g" \
-                argocd-apps/hello-chart-app.yaml.template > argocd-apps/hello-chart-app.yaml
+          sed -e "s|\${CHART_VERSION}|$CHART_VERSION|g" \
+              -e "s|\${DOCKERHUB_USERNAME}|$DOCKERHUB_USERNAME|g" \
+              argocd-apps/hello-chart-app.yaml.template > argocd-apps/hello-chart-app.yaml
 
-        - name: Apply ArgoCD Application
-          run: |
-            kubectl apply -f argocd-apps/hello-chart-app.yaml
+      - name: Apply ArgoCD Application
+        run: |
+          kubectl apply -f argocd-apps/hello-chart-app.yaml
 
-        - name: Login to Argo CD
-          run: |
-            argocd login ${{ secrets.ARGOCD_SERVER }} \
+      # This 'Login to Argo CD' step needs to be correctly indented and placed.
+      # It was previously at the same level as the 'run' command for 'Apply ArgoCD Application'.
+      # Also, the '--insecure' and '--grpc-web' flags should be consistent with the other argocd login.
+      - name: Login to Argo CD
+        run: |
+          argocd login ${{ secrets.ARGOCD_SERVER }} \
             --username admin \
             --password ${{ secrets.ARGOCD_PASSWORD }} \
             --insecure \
             --grpc-web
+
       # --- START Workaround: Establish Port-Forwarding Tunnel ---
       - name: Start ArgoCD Ingress Port Forward
         id: start_port_forward # Give this step an ID to reference its outputs
@@ -139,13 +142,12 @@ jobs:
 
           echo "Port-forwarding started for NGINX Ingress Controller on localhost:8443 (PID: $PF_PID)"
           # Export the PID as an environment variable to be available in subsequent steps for cleanup
-          echo "PF_PID=$PF_PID" >> $GITHUB_ENV
+          echo "PF_PID=$PF_PID" >> "$GITHUB_ENV" # Quoted $GITHUB_ENV for robustness
 
           # Wait a moment for the tunnel to establish. 10 seconds is usually safe.
           sleep 10
           echo "Port-forwarding tunnel established."
-        # Set a timeout for this step to prevent infinite hangs if port-forward fails to start
-        timeout-minutes: 1
+        timeout-minutes: 1 # This is an option for the step, so it should be at the same level as 'run' and 'id'.
 
       # --- Use the Tunnel for Argo CD Commands ---
       - name: Login to Argo CD via Port Forward
@@ -155,11 +157,11 @@ jobs:
             --insecure --grpc-web \
             --auth-token ${{ secrets.ARGOCD_TOKEN }}
 
-        - name: Sync Application
-          run: argocd app sync hello-chart-app --grpc-web
+      - name: Sync Application # This step was incorrectly indented, it should be at the same level as the previous steps.
+        run: argocd app sync hello-chart-app --grpc-web
 
-        - name: Wait for Health
-          run: argocd app wait hello-chart-app --health --operation --timeout 90s --grpc-web
+      - name: Wait for Health # This step was incorrectly indented.
+        run: argocd app wait hello-chart-app --health --operation --timeout 90s --grpc-web
 
       # --- END Workaround: Clean Up Port-Forwarding Tunnel ---
       - name: Stop ArgoCD Ingress Port Forward
