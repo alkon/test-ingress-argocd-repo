@@ -6,6 +6,7 @@ metadata:
   namespace: argocd
   annotations:
     nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/backend-protocol: GRPC # <--- ADD THIS ANNOTATION
 spec:
   ingressClassName: nginx
   rules:

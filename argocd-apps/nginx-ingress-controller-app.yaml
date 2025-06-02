@@ -15,6 +15,8 @@ spec:
       values: |
         controller: # Ingress Controller-specific values are nested under 'controller'
           replicaCount: 1
+          config:
+            enable-grpc-web: true # <--- Enable GRPC
           service:
             type: LoadBalancer # ESSENTIAL for K3d to expose via host ports
             externalTrafficPolicy: "Local"
