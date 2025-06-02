@@ -90,10 +90,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download Chart Version Artifact
-          uses: actions/download-artifact@v4
-          with:
-            name: chart-version # This 'name' must match the 'name' used in your 'Upload Chart Version Artifact' step
-            path: . # This will download the artifact to the current working directory, so 'cat chart-version.txt' can find it.
+        uses: actions/download-artifact@v4
+        with:
+          name: chart-version # This 'name' must match the 'name' used in your 'Upload Chart Version Artifact' step
+          path: . # This will download the artifact to the current working directory, so 'cat chart-version.txt' can find it.
 
       - name: Prepare Application Manifest
         run: |
