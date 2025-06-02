@@ -1,0 +1,25 @@
+# argocd-ingress/argocd-ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argocd-ingress
+  namespace: argocd
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: argocd.172-18-0-4.nip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: argocd-server
+                port:
+                  number: 80
+  tls: # <-- ADD THIS TLS BLOCK
+    - hosts:
+        - argocd.172-18-0-4.nip.io # Your corrected hostname
+      secretName: argocd-tls # Name of the secret you just created

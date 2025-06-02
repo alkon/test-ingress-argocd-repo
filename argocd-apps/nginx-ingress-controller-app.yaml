@@ -1,0 +1,40 @@
+# argocd-apps/nginx-ingress-controller-app.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nginx-ingress-controller-app # A distinct name to indicate it's the Ingress Controller
+  namespace: argocd # Argo CD application definition lives in the argocd namespace
+spec:
+  project: default
+  source:
+    repoURL: registry-1.docker.io/bitnamicharts # IMPORTANT: OCI prefix for OCI Helm charts
+    chart: nginx-ingress-controller # CORRECT chart name for the Ingress Controller
+    targetRevision: 11.6.22 # IMPORTANT: Use a current and stable version for this chart. Check Artifact Hub!
+    helm:
+      releaseName: nginx-ingress-controller-release # A specific release name for Helm
+      values: |
+        controller: # Ingress Controller-specific values are nested under 'controller'
+          replicaCount: 1
+          service:
+            type: LoadBalancer # ESSENTIAL for K3d to expose via host ports
+            externalTrafficPolicy: "Local"
+            ports:
+              http: 80
+              https: 443
+          ingressClassResource: # Ensure the IngressClass is created and named correctly
+            name: nginx
+            enabled: true
+            default: false # Set to true if you want it to be the default for all Ingresses
+      parameters:
+        - name: controller.service.externalTrafficPolicy
+          value: "Local" # Ensure this is passed as a string  externalTrafficPolicy: Local
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ingress-nginx # Common and clear namespace for the Ingress Controller
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true # Automatically create the target namespace if it doesn't exist
+      # - ApplyOutOfSyncOnly=true # Consider this for advanced scenarios to reduce reconciliation noise

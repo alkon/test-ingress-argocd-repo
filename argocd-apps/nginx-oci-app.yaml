@@ -15,7 +15,8 @@ spec:
       values: |
         replicaCount: 1
         service:
-          type: ClusterIP
+          type: LoadBalancer # MUST be LoadBalancer for K3d to expose it
+          externalTrafficPolicy: Local # Crucial for K3d/Docker Desktop for IP preservation
           ports:
             http: 80
             https: 443

@@ -1,3 +1,4 @@
+# helm/hello-chart/Chart.yaml
 apiVersion: v2
 name: hello-chart
 description: A simple Hello World Helm chart
