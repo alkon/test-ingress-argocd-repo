@@ -110,40 +110,40 @@ jobs:
 
       # --- START Workaround: Establish Port-Forwarding Tunnel ---
       - name: Start ArgoCD Ingress Port Forward
-          id: start_port_forward
-          run: |
-            NGINX_POD=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/name=nginx-ingress-controller -o jsonpath='{.items[0].metadata.name}')
-            
-            if [ -z "$NGINX_POD" ]; then
-              echo "Error: NGINX Ingress Controller pod not found. Exiting."
+        id: start_port_forward
+        run: |
+          NGINX_POD=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/name=nginx-ingress-controller -o jsonpath='{.items[0].metadata.name}')
+          
+          if [ -z "$NGINX_POD" ]; then
+            echo "Error: NGINX Ingress Controller pod not found. Exiting."
+            exit 1
+          fi
+          
+          echo "Found NGINX Ingress Controller Pod: $NGINX_POD"
+          
+          # Start port-forwarding to the NGINX Ingress Controller's actual HTTPS port (8443)
+          # using local port 8443. Run in background.
+          kubectl port-forward -n ingress-nginx "$NGINX_POD" 8443:8443 & # <--- CHANGE THIS LINE!
+          PF_PID=$!
+          echo "Port-forwarding started for NGINX Ingress Controller on localhost:8443 (PID: $PF_PID)"
+          echo "PF_PID=$PF_PID" >> "$GITHUB_ENV"
+          
+          # --- Robust Wait Loop for Port-Forwarding ---
+          echo "Waiting for port-forwarding tunnel to be ready..."
+          timeout=60 # Max wait time in seconds
+          elapsed=0
+          while ! nc -z localhost 8443 >/dev/null 2>&1; do
+            if [ $elapsed -ge $timeout ]; then
+              echo "Error: Port-forwarding tunnel did not become ready within $timeout seconds."
+              kill "$PF_PID" || true
               exit 1
             fi
-            
-            echo "Found NGINX Ingress Controller Pod: $NGINX_POD"
-            
-            # Start port-forwarding to the NGINX Ingress Controller's actual HTTPS port (8443)
-            # using local port 8443. Run in background.
-            kubectl port-forward -n ingress-nginx "$NGINX_POD" 8443:8443 & # <--- CHANGE THIS LINE!
-            PF_PID=$!
-            echo "Port-forwarding started for NGINX Ingress Controller on localhost:8443 (PID: $PF_PID)"
-            echo "PF_PID=$PF_PID" >> "$GITHUB_ENV"
-            
-            # --- Robust Wait Loop for Port-Forwarding ---
-            echo "Waiting for port-forwarding tunnel to be ready..."
-            timeout=60 # Max wait time in seconds
-            elapsed=0
-            while ! nc -z localhost 8443 >/dev/null 2>&1; do
-              if [ $elapsed -ge $timeout ]; then
-                echo "Error: Port-forwarding tunnel did not become ready within $timeout seconds."
-                kill "$PF_PID" || true
-                exit 1
-              fi
-              echo "Port 8443 not yet open. Waiting..."
-              sleep 5
-              elapsed=$((elapsed + 5))
-            done
-            echo "Port-forwarding tunnel established and ready."
-          timeout-minutes: 2
+            echo "Port 8443 not yet open. Waiting..."
+            sleep 5
+            elapsed=$((elapsed + 5))
+          done
+          echo "Port-forwarding tunnel established and ready."
+        timeout-minutes: 2
 
       # --- Use the Tunnel for Argo CD Commands ---
       - name: Login to Argo CD via Port Forward
