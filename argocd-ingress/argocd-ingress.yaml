@@ -1,26 +1,27 @@
-# argocd-ingress/argocd-ingress.yaml
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: argocd-ingress
   namespace: argocd
   annotations:
-    nginx.ingress.kubernetes.io/ssl-redirect: "false"
-    nginx.ingress.kubernetes.io/backend-protocol: GRPC # <--- ADD THIS ANNOTATION
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+    # REMOVE THIS LINE ENTIRELY:
+    # nginx.ingress.kubernetes.io/ssl-passthrough: "true"
 spec:
-  ingressClassName: nginx
   rules:
-    - host: argocd.172-18-0-4.nip.io
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: argocd-server
-                port:
-                  number: 80
-  tls: # <-- ADD THIS TLS BLOCK
-    - hosts:
-        - argocd.172-18-0-4.nip.io # Your corrected hostname
-      secretName: argocd-tls # Name of the secret you just created
+  - host: argocd.172-18-0-4.nip.io
+    http:
+      paths:
+      - path: / # This matches all paths, which is appropriate for gRPC
+        pathType: Prefix
+        backend:
+          service:
+            name: argocd-server
+            port:
+              number: 80 # This is the service port that maps to the pod's targetPort 8080
+  tls:
+  - hosts:
+    - argocd.172-18-0-4.nip.io
+    secretName: argocd-tls # This secret is used by NGINX to terminate TLS
