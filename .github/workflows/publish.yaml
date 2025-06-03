@@ -92,8 +92,8 @@ jobs:
       - name: Download Chart Version Artifact
         uses: actions/download-artifact@v4
         with:
-          name: chart-version # This 'name' must match the 'name' used in your 'Upload Chart Version Artifact' step
-          path: . # This will download the artifact to the current working directory, so 'cat chart-version.txt' can find it.
+          name: chart-version
+          path: .
 
       - name: Prepare Application Manifest
         run: |
@@ -108,29 +108,39 @@ jobs:
         run: |
           kubectl apply -f argocd-apps/hello-chart-app.yaml
 
+      # --- ADD THIS STEP TO GET THE DYNAMIC ARGOCD ADMIN PASSWORD ---
+      - name: Get Argo CD Admin Password
+        id: get_argocd_password # Assign an ID to reference its outputs later
+        run: |
+          # Retrieve the initial admin password from the Kubernetes secret and decode it
+          ARGOCD_ADMIN_PASSWORD=$(kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.password}' | base64 -d)
+          # Store the password as a step output. GitHub Actions will automatically mask sensitive output.
+          echo "argocd_password=$ARGOCD_ADMIN_PASSWORD" >> "$GITHUB_OUTPUT"
+          echo "Argo CD admin password retrieved successfully."
+        # Add a timeout here too, in case the secret isn't immediately available
+        timeout-minutes: 1
+
+
       # --- START Workaround: Establish Port-Forwarding Tunnel ---
       - name: Start ArgoCD Ingress Port Forward
         id: start_port_forward
         run: |
           NGINX_POD=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/name=nginx-ingress-controller -o jsonpath='{.items[0].metadata.name}')
-          
+
           if [ -z "$NGINX_POD" ]; then
             echo "Error: NGINX Ingress Controller pod not found. Exiting."
             exit 1
           fi
-          
+
           echo "Found NGINX Ingress Controller Pod: $NGINX_POD"
-          
-          # Start port-forwarding to the NGINX Ingress Controller's actual HTTPS port (8443)
-          # using local port 8443. Run in background.
-          kubectl port-forward -n ingress-nginx "$NGINX_POD" 8443:8443 & # <--- CHANGE THIS LINE!
+
+          kubectl port-forward -n ingress-nginx "$NGINX_POD" 8443:8443 &
           PF_PID=$!
           echo "Port-forwarding started for NGINX Ingress Controller on localhost:8443 (PID: $PF_PID)"
           echo "PF_PID=$PF_PID" >> "$GITHUB_ENV"
-          
-          # --- Robust Wait Loop for Port-Forwarding ---
+
           echo "Waiting for port-forwarding tunnel to be ready..."
-          timeout=60 # Max wait time in seconds
+          timeout=60
           elapsed=0
           while ! nc -z localhost 8443 >/dev/null 2>&1; do
             if [ $elapsed -ge $timeout ]; then
@@ -148,9 +158,10 @@ jobs:
       # --- Use the Tunnel for Argo CD Commands ---
       - name: Login to Argo CD via Port Forward
         run: |
-          yes | argocd login localhost:8443 \
+          argocd login localhost:8443 \
             --insecure --grpc-web \
-            --auth-token ${{ secrets.ARGOCD_TOKEN }}
+            --username admin \
+            --password ${{ steps.get_argocd_password.outputs.argocd_password }} # <--- USE THE DYNAMIC PASSWORD HERE
 
       - name: Sync Application via Port Forward
         run: argocd app sync hello-chart-app --grpc-web
@@ -164,7 +175,6 @@ jobs:
         run: |
           if [ -n "$PF_PID" ]; then
             echo "Stopping port-forwarding process (PID: $PF_PID)..."
-            # Use 'kill -0' to check if process exists before attempting to kill
             if kill -0 "$PF_PID" >/dev/null 2>&1; then
               kill "$PF_PID"
               echo "Port-forwarding stopped."
