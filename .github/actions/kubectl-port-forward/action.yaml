@@ -1,0 +1,101 @@
+# .github/actions/kubectl-port-forward/action.yml
+name: "Kubectl Port Forward"
+description: "Establishes a kubectl port-forward tunnel to a Kubernetes service."
+
+inputs:
+  service:
+    description: "Name of the Kubernetes Service to port-forward to (e.g., argocd-server)"
+    required: true
+  namespace:
+    description: "Namespace where the Kubernetes Service resides (e.g., argocd)"
+    required: true
+  local-port:
+    description: "Local port on the runner to open for the tunnel (e.g., 8443)"
+    required: true
+  remote-port:
+    description: "Port on the Kubernetes Service to forward from (e.g., 443)"
+    required: true
+  wait-for-ready:
+    description: "Whether to wait for the local port to be ready after starting the tunnel."
+    required: false
+    default: "true" # Default to true for reliability
+  timeout:
+    description: "Timeout in seconds for the port readiness check."
+    required: false
+    default: "60" # Default timeout for the readiness check
+
+runs:
+  using: "composite" # This indicates it's a composite run action (wrapping shell commands)
+  steps:
+    # -------------------------------------------------------------
+    # Main Step: Start the port-forwarding process in the background
+    # -------------------------------------------------------------
+    - name: Start Port Forward
+      shell: bash
+      run: |
+        echo "Starting port-forward: ${{ inputs.service }} in namespace ${{ inputs.namespace }} from localhost:${{ inputs.local-port }} to service:${{ inputs.remote-port }}"
+
+        # Run kubectl port-forward in the background and capture its PID
+        kubectl port-forward -n ${{ inputs.namespace }} service/${{ inputs.service }} ${{ inputs.local-port }}:${{ inputs.remote-port }} &
+        PF_PID=$! # Capture the PID of the last background command
+
+        echo "Port-forwarding process started with PID: $PF_PID"
+
+        # IMPORTANT: Store the PID in GITHUB_STATE so the 'post' hook can access it for cleanup.
+        # GITHUB_STATE is specifically designed for passing state between 'main' and 'post' hooks within the same action.
+        echo "pf_pid=$PF_PID" >> $GITHUB_STATE
+
+        # Also, set it in GITHUB_ENV for any subsequent steps within the same job
+        # that might explicitly need access to the PID, though the argocd login
+        # and sync commands don't directly use it (they use localhost:port).
+        echo "PF_PID=$PF_PID" >> $GITHUB_ENV
+
+    # -------------------------------------------------------------
+    # Step: Wait for the port-forwarding tunnel to be ready
+    # -------------------------------------------------------------
+    - name: Wait for Port Forward to be Ready
+      if: ${{ inputs.wait-for-ready == 'true' }} # Only run if wait-for-ready is true
+      shell: bash
+      run: |
+        timeout=${{ inputs.timeout }}
+        local_port=${{ inputs.local-port }}
+        elapsed=0
+
+        # Give kubectl a tiny moment to actually start the background process
+        sleep 2
+
+        # Loop until the port is open or timeout is reached
+        while ! nc -z localhost "$local_port" >/dev/null 2>&1; do
+          if [ "$elapsed" -ge "$timeout" ]; then
+            echo "Error: Port-forwarding tunnel did not become ready on localhost:$local_port within $timeout seconds."
+            # The 'post' action will handle cleanup even if we exit here.
+            exit 1
+          fi
+          echo "Port $local_port not yet open. Waiting..."
+          sleep 5
+          elapsed=$((elapsed + 5))
+        done
+        echo "Port-forwarding tunnel established and ready on localhost:$local_port."
+
+# -------------------------------------------------------------
+# Post Hook: Ensures cleanup even if the job fails
+# -------------------------------------------------------------
+post:
+  - name: Stop Port Forward
+    shell: bash
+    run: |
+      # Retrieve the PID from GITHUB_STATE
+      PF_PID=$(echo "${{ github.state.pf_pid }}")
+
+      if [ -n "$PF_PID" ]; then
+        echo "Attempting to stop port-forwarding process (PID: $PF_PID)..."
+        # Check if the process is still running before attempting to kill it
+        if kill -0 "$PF_PID" >/dev/null 2>&1; then
+          kill "$PF_PID"
+          echo "Port-forwarding stopped successfully."
+        else
+          echo "Port-forwarding process (PID: $PF_PID) already terminated or not found. No action needed."
+        fi
+      else
+        echo "No port-forwarding process PID found in state. Skipping termination."
+      fi

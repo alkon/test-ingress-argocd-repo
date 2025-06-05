@@ -95,73 +95,42 @@ jobs:
           name: chart-version
           path: .
 
-      - name: Prepare Application Manifest
+      # --- KUBECONFIG Setup: THIS IS ESSENTIAL AND MUST BE HERE! ---
+      - name: Set up Kubeconfig for K3D Cluster
         run: |
-          CHART_VERSION=$(cat chart-version.txt)
-          DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG_CONTENT }}" > ~/.kube/config
+          chmod 600 ~/.kube/config
+          # Set KUBECONFIG env var for all subsequent steps in this job,
+          # including calls to your custom action.
+          echo "KUBECONFIG=$HOME/.kube/config" >> $GITHUB_ENV
 
-          sed -e "s|\${CHART_VERSION}|$CHART_VERSION|g" \
-              -e "s|\${DOCKERHUB_USERNAME}|$DOCKERHUB_USERNAME|g" \
-              argocd-apps/hello-chart-app.yaml.template > argocd-apps/hello-chart-app.yaml
-
-      - name: Apply ArgoCD Application
-        run: |
-          kubectl apply -f argocd-apps/hello-chart-app.yaml
-
-      # --- ADD THIS STEP TO GET THE DYNAMIC ARGOCD ADMIN PASSWORD ---
       - name: Get Argo CD Admin Password
-        id: get_argocd_password # Assign an ID to reference its outputs later
+        id: get_argocd_password
         run: |
-          # Retrieve the initial admin password from the Kubernetes secret and decode it
           ARGOCD_ADMIN_PASSWORD=$(kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.password}' | base64 -d)
-          # Store the password as a step output. GitHub Actions will automatically mask sensitive output.
           echo "argocd_password=$ARGOCD_ADMIN_PASSWORD" >> "$GITHUB_OUTPUT"
           echo "Argo CD admin password retrieved successfully."
-        # Add a timeout here too, in case the secret isn't immediately available
         timeout-minutes: 1
 
+      # --- Use YOUR OWN Custom Port-Forwarding Action ---
+      # This action will now correctly pick up the KUBECONFIG set above.
+      - name: Start ArgoCD Service Port Forward
+        uses: ./.github/actions/kubectl-port-forward # Path to your custom action
+        with:
+          service: argocd-server
+          namespace: argocd
+          local-port: 8443
+          remote-port: 443
+          wait-for-ready: true
+          timeout: 60
 
-      # --- START Workaround: Establish Port-Forwarding Tunnel ---
-      - name: Start ArgoCD Ingress Port Forward
-        id: start_port_forward
-        run: |
-          NGINX_POD=$(kubectl get pods -n ingress-nginx -l app.kubernetes.io/name=nginx-ingress-controller -o jsonpath='{.items[0].metadata.name}')
-
-          if [ -z "$NGINX_POD" ]; then
-            echo "Error: NGINX Ingress Controller pod not found. Exiting."
-            exit 1
-          fi
-
-          echo "Found NGINX Ingress Controller Pod: $NGINX_POD"
-
-          kubectl port-forward -n ingress-nginx "$NGINX_POD" 8443:8443 &
-          PF_PID=$!
-          echo "Port-forwarding started for NGINX Ingress Controller on localhost:8443 (PID: $PF_PID)"
-          echo "PF_PID=$PF_PID" >> "$GITHUB_ENV"
-
-          echo "Waiting for port-forwarding tunnel to be ready..."
-          timeout=60
-          elapsed=0
-          while ! nc -z localhost 8443 >/dev/null 2>&1; do
-            if [ $elapsed -ge $timeout ]; then
-              echo "Error: Port-forwarding tunnel did not become ready within $timeout seconds."
-              kill "$PF_PID" || true
-              exit 1
-            fi
-            echo "Port 8443 not yet open. Waiting..."
-            sleep 5
-            elapsed=$((elapsed + 5))
-          done
-          echo "Port-forwarding tunnel established and ready."
-        timeout-minutes: 2
-
-      # --- Use the Tunnel for Argo CD Commands ---
       - name: Login to Argo CD via Port Forward
         run: |
           argocd login localhost:8443 \
             --insecure --grpc-web \
             --username admin \
-            --password ${{ steps.get_argocd_password.outputs.argocd_password }} # <--- USE THE DYNAMIC PASSWORD HERE
+            --password ${{ steps.get_argocd_password.outputs.argocd_password }}
 
       - name: Sync Application via Port Forward
         run: argocd app sync hello-chart-app --grpc-web
@@ -169,18 +138,4 @@ jobs:
       - name: Wait for Health via Port Forward
         run: argocd app wait hello-chart-app --health --operation --timeout 90s --grpc-web
 
-      # --- END Workaround: Clean Up Port-Forwarding Tunnel ---
-      - name: Stop ArgoCD Ingress Port Forward
-        if: always()
-        run: |
-          if [ -n "$PF_PID" ]; then
-            echo "Stopping port-forwarding process (PID: $PF_PID)..."
-            if kill -0 "$PF_PID" >/dev/null 2>&1; then
-              kill "$PF_PID"
-              echo "Port-forwarding stopped."
-            else
-              echo "Port-forwarding process (PID: $PF_PID) already terminated."
-            fi
-          else
-            echo "No port-forwarding process PID found, skipping termination."
-          fi
+      # --- No separate cleanup step needed due to the custom action's 'post' hook ---
