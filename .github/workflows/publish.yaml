@@ -115,15 +115,15 @@ jobs:
 
       # --- Use YOUR OWN Custom Port-Forwarding Action ---
       # This action will now correctly pick up the KUBECONFIG set above.
-      - name: Start ArgoCD Service Port Forward
-        uses: ./.github/actions/kubectl-port-forward # Path to your custom action
-        with:
-          service: argocd-server
-          namespace: argocd
-          local-port: 8443
-          remote-port: 443
-          wait-for-ready: true
-          timeout: 60
+#      - name: Start ArgoCD Service Port Forward
+#        uses: ./.github/actions/kubectl-port-forward # Path to your custom action
+#        with:
+#          service: argocd-server
+#          namespace: argocd
+#          local-port: 8443
+#          remote-port: 443
+#          wait-for-ready: true
+#          timeout: 60
 
       - name: Login to Argo CD via Port Forward
         run: |
