@@ -14,6 +14,8 @@ jobs:
     strategy:
       matrix:
         python-version: [ "3.13" ]
+    env:
+      AGENT_TOOLSDIRECTORY: /Users/alex/PycharmProjects/test-ingress-argocd-prj/actions-runner/_work/_toolcache
 
     steps:
       - name: Checkout code
