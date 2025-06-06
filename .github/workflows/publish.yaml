@@ -98,7 +98,7 @@ jobs:
       - name: Set up Kubeconfig for K3D Cluster
         run: |
           mkdir -p ~/.kube
-          echo "${{ secrets.KUBECONFIG }}" > ~/.kube/config
+          echo "${{ secrets.KUBECONFIG_CONTENT }}" > ~/.kube/config # Corrected secret name if it was KUBECONFIG_CONTENT
           chmod 600 ~/.kube/config
           # Set KUBECONFIG env var for all subsequent steps in this job,
           # including calls to your custom action.
@@ -122,16 +122,31 @@ jobs:
           remote-port: 443
           wait-for-ready: true
           timeout: 60
+        env:
+          KUBECONFIG: ${{ env.KUBECONFIG }} # Ensure KUBECONFIG is passed to your action
 
-      - name: Login to Argo CD via Port Forward
+      # --- Apply Application Manifest with kubectl ---
+      - name: Apply Argo CD Application Manifest
+        # Corrected indentation for 'env:' and 'run:'
+        env:
+          KUBECONFIG: ${{ env.KUBECONFIG }}
         run: |
-          argocd login localhost:8443 \
-            --insecure --grpc-web \
-            --username admin \
-            --password ${{ steps.get_argocd_password.outputs.argocd_password }}
-
-      - name: Sync Application via Port Forward
-        run: argocd app sync hello-chart-app --grpc-web
+          # Read CHART_VERSION from the artifact
+          CHART_VERSION=$(cat chart-version/chart_version.txt)
+          echo "Detected CHART_VERSION: $CHART_VERSION"
+          
+          # Use sed (or envsubst if installed) to replace placeholders and create the final manifest
+          # For macOS/BSD sed, you often need to provide a backup extension (e.g., '')
+          sed -i '' "s|\${DOCKERHUB_USERNAME}|${{ secrets.DOCKERHUB_USERNAME }}|g" argocd-apps/hello-chart-app.yaml.template
+          sed -i '' "s|\${CHART_VERSION}|$CHART_VERSION|g" argocd-apps/hello-chart-app.yaml.template
+          
+          # Rename the templated file to its final name
+          mv argocd-apps/hello-chart-app.yaml.template argocd-apps/hello-chart-app.yaml
+          
+          # Apply the Argo CD Application manifest directly to Kubernetes
+          echo "Applying Argo CD Application manifest..."
+          kubectl apply -f argocd-apps/hello-chart-app.yaml
+          echo "Argo CD Application manifest applied successfully."    
 
       - name: Check Application Health (with Diagnostics)
         uses: ./.github/actions/app-health-check # Path to your new custom action
@@ -142,8 +157,7 @@ jobs:
           argocd-server-address: localhost:8443 # The address where Argo CD is accessible via port-forward
           argocd-username: admin # Your Argo CD admin username
           argocd-password: ${{ steps.get_argocd_password.outputs.argocd_password }} # The password retrieved from the previous step
-
-#      - name: Wait for Health via Port Forward
-#        run: argocd app wait hello-chart-app --health --operation --timeout 90 --grpc-web
+        env:
+          KUBECONFIG: ${{ env.KUBECONFIG }}
 
       # --- No separate cleanup step needed due to the custom action's 'post' hook ---
