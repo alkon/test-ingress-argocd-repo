@@ -1,28 +1,71 @@
-# .github/actions/setup-python-and-deps-for-lint/action.yml
-name: "Set up Python and Install Dependencies for Linting"
-description: "Sets up a specified Python version and installs project/linting dependencies."
-
+# ./.github/actions/setup-python-and-deps-for-lint/action.yml
+name: 'Manual Python Setup and Dependencies'
+description: 'Manually sets up a specified Python version and installs dependencies.'
 inputs:
   python-version:
-    description: "The Python version to set up"
+    description: 'The Python version to set up (e.g., "3.13").'
     required: true
   requirements-path:
-    description: "Path to the project's requirements.txt file"
+    description: 'Path to the requirements.txt file (e.g., "app/requirements.txt").'
+    required: true
+  python-download-url:
+    description: 'Direct download URL for the Python tar.gz archive. Required for manual setup.'
     required: true
 
 runs:
   using: "composite"
   steps:
-    - name: Set up Python ${{ inputs.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ inputs.python-version }}
-        cache: 'pip'
-        cache-dependency-path: ${{ inputs.requirements-path }}
-
-    - name: Install dependencies (Pylint and application requirements)
+    - name: Create Python Install Directory
       shell: bash
       run: |
-        python -m pip install --upgrade pip
-        pip install pylint
+        PYTHON_INSTALL_DIR="${{ github.workspace }}/.python_install/${{ inputs.python-version }}"
+        mkdir -p "$PYTHON_INSTALL_DIR"
+        echo "Created Python install directory: $PYTHON_INSTALL_DIR"
+        echo "PYTHON_INSTALL_DIR=$PYTHON_INSTALL_DIR" >> $GITHUB_ENV # Make available for subsequent steps
+
+    - name: Download and Extract Python
+      shell: bash
+      run: |
+        PYTHON_INSTALL_DIR="${{ env.PYTHON_INSTALL_DIR }}"
+        PYTHON_DOWNLOAD_URL="${{ inputs.python-download-url }}"
+        echo "Downloading Python from: $PYTHON_DOWNLOAD_URL"
+        curl -L "$PYTHON_DOWNLOAD_URL" -o python.tar.gz
+        echo "Extracting Python to $PYTHON_INSTALL_DIR..."
+        tar xz -C "$PYTHON_INSTALL_DIR" -f python.tar.gz
+        rm python.tar.gz # Clean up the downloaded tarball
+
+    - name: Set Python PATH and Verify
+      shell: bash
+      run: |
+        PYTHON_INSTALL_DIR="${{ env.PYTHON_INSTALL_DIR }}"
+        # Adjust this find command based on where the python executable is inside the extracted archive.
+        # Common paths: {extracted_dir}/bin/python3.13, {extracted_dir}/python.framework/Versions/3.13/bin/python3.13
+        # We'll use a robust find, but you might need to fine-tune if it fails.
+        PYTHON_EXECUTABLE_PATH=$(find "$PYTHON_INSTALL_DIR" -name "python${{ inputs.python-version }}" -type f -print -quit)
+
+        if [ -z "$PYTHON_EXECUTABLE_PATH" ]; then
+            # Fallback for common MacOS framework structure
+            PYTHON_EXECUTABLE_PATH=$(find "$PYTHON_INSTALL_DIR" -name "python3" -type f -path "*/Versions/${{ inputs.python-version }}/*" -print -quit)
+        fi
+
+        if [ -z "$PYTHON_EXECUTABLE_PATH" ]; then
+            echo "Error: Could not find Python executable for version ${{ inputs.python-version }}."
+            exit 1
+        fi
+
+        PYTHON_BIN_DIR=$(dirname "$PYTHON_EXECUTABLE_PATH")
+        echo "Located Python executable at: $PYTHON_EXECUTABLE_PATH"
+        echo "Adding Python binaries to PATH: $PYTHON_BIN_DIR"
+        echo "PATH=$PYTHON_BIN_DIR:$PATH" >> $GITHUB_ENV # Add to PATH for current and future steps
+
+        # Verify Python version
+        echo "Verifying Python version:"
+        python --version
+
+    - name: Install Python Dependencies
+      shell: bash
+      run: |
+        echo "Installing Python dependencies from ${{ inputs.requirements-path }}..."
+        # Now that python is on PATH, we can simply use 'pip'
         pip install -r ${{ inputs.requirements-path }}
+        echo "Dependencies installed."
