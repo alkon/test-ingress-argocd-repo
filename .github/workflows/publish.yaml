@@ -95,11 +95,6 @@ jobs:
           name: chart-version
           path: .
 
-      # Add the jq installation
-      - name: Install jq (for macOS runners)
-        run: |
-          brew install jq    
-
       - name: Set up Kubeconfig for K3D Cluster
         run: |
           mkdir -p ~/.kube
