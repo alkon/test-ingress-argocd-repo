@@ -12,7 +12,7 @@ inputs:
   wait-timeout:
     description: "Timeout in seconds for 'argocd app wait' (e.g., 90)."
     required: false
-    default: "90"
+    default: "300" # <--- Increased default timeout to 5 minutes (300 seconds)
   argocd-server-address:
     description: "The address of the Argo CD API server (e.g., localhost:8443)."
     required: true
@@ -35,13 +35,20 @@ runs:
           --username ${{ inputs.argocd-username }} \
           --password ${{ inputs.argocd-password }}
 
+    - name: Force Argo CD Application Refresh
+      shell: bash
+      run: |
+        echo "Attempting to force Argo CD application refresh for ${{ inputs.app-name }}..."
+        # Force a refresh of the application to ensure Argo CD picks up the latest targetRevision
+        argocd app refresh ${{ inputs.app-name }} --grpc-web || echo "Warning: Failed to force refresh, continuing with wait."
+
     - name: Wait for Argo CD Application Health
       id: wait_health # Assign an ID to this step to check its outcome later
       shell: bash
       # Use `|| true` to prevent this step from failing immediately,
       # allowing the diagnostic step to run on failure.
-      # The main workflow job will still fail if this step's output indicates failure.
       run: |
+        echo "Waiting for Argo CD application '${{ inputs.app-name }}' to become healthy (timeout: ${{ inputs.wait-timeout }}s)..."
         argocd app wait ${{ inputs.app-name }} --health --operation --timeout ${{ inputs.wait-timeout }} --grpc-web || true
 
         # Check the exit code of the 'argocd app wait' command.

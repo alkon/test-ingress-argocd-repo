@@ -95,14 +95,6 @@ jobs:
           name: chart-version
           path: .
 
-      # --- TEMPORARY DEBUG STEP ---
-#      - name: Debug List Current Directory Contents
-#        run: |
-#          echo "Listing contents of current directory ('.'):"
-#          ls -F  # -F adds indicators like / for directories
-#          echo "--- End of Listing ---"
-      # --- END TEMPORARY DEBUG STEP ---
-
       - name: Set up Kubeconfig for K3D Cluster
         run: |
           mkdir -p ~/.kube
