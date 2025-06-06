@@ -96,22 +96,13 @@ jobs:
           path: .
 
       - name: Set up Kubeconfig for K3D Cluster
-        run: |
-          mkdir -p ~/.kube
-          # Write the base Kubeconfig content
-          echo "${{ secrets.KUBECONFIG_CONTENT }}" > ~/.kube/config
-          
-          # Add or ensure insecure-skip-tls-verify is true for the cluster
-          # This assumes your cluster is named 'k3d-mycluster' or similar in the kubeconfig
-          # You might need to adjust 'k3d-mycluster' to your actual cluster name from your kubeconfig
-          CLUSTER_NAME=$(kubectl config current-context | sed 's/^k3d-//') # This attempts to derive cluster name, e.g., if context is k3d-test, cluster is test
-          if ! kubectl config view --raw -o json | jq -e ".clusters[] | select(.name == \"$CLUSTER_NAME\") | .cluster[\"insecure-skip-tls-verify\"] == true" > /dev/null; then
-            echo "Adding insecure-skip-tls-verify: true to cluster $CLUSTER_NAME"
-            kubectl config set-cluster "$CLUSTER_NAME" --insecure-skip-tls-verify=true --kubeconfig=~/.kube/config
-          fi
-          
-          chmod 600 ~/.kube/config
-          echo "KUBECONFIG=$HOME/.kube/config" >> $GITHUB_ENV
+          run: |
+            mkdir -p ~/.kube
+            # Directly write the pre-configured Kubeconfig content from your GitHub Secret
+            echo "${{ secrets.KUBECONFIG_CONTENT }}" > ~/.kube/config
+            chmod 600 ~/.kube/config
+            # Set KUBECONFIG env var for all subsequent steps in this job.
+            echo "KUBECONFIG=$HOME/.kube/config" >> $GITHUB_ENV
 
       - name: Get Argo CD Admin Password
         id: get_argocd_password
