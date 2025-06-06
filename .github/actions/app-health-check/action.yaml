@@ -35,12 +35,12 @@ runs:
           --username ${{ inputs.argocd-username }} \
           --password ${{ inputs.argocd-password }}
 
-    - name: Force Argo CD Application Refresh
-      shell: bash
-      run: |
-        echo "Attempting to force Argo CD application refresh for ${{ inputs.app-name }}..."
-        # Force a refresh of the application to ensure Argo CD picks up the latest targetRevision
-        argocd app refresh ${{ inputs.app-name }} --grpc-web || echo "Warning: Failed to force refresh, continuing with wait."
+#    - name: Force Argo CD Application Refresh
+#      shell: bash
+#      run: |
+#        echo "Attempting to force Argo CD application refresh for ${{ inputs.app-name }}..."
+#        # Force a refresh of the application to ensure Argo CD picks up the latest targetRevision
+#        argocd app refresh ${{ inputs.app-name }} --grpc-web || echo "Warning: Failed to force refresh, continuing with wait."
 
     - name: Wait for Argo CD Application Health
       id: wait_health # Assign an ID to this step to check its outcome later
