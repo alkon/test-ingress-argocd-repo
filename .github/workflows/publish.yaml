@@ -21,11 +21,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python and Install Dependencies
-        uses: ./.github/actions/setup-python-and-deps-for-lint # <--- Here's the custom action usage
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-          requirements-path: app/requirements.txt # <--- Passing the input to the custom action
+          cache: 'pip' # Recommended for caching pip dependencies
+
+      - name: Install Dependencies
+        run: |
+          pip install -r app/requirements.txt
 
       - name: Run Pylint
         run: |
