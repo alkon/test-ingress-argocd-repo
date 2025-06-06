@@ -134,6 +134,6 @@ jobs:
         run: argocd app sync hello-chart-app --grpc-web
 
       - name: Wait for Health via Port Forward
-        run: argocd app wait hello-chart-app --health --operation --timeout 90s --grpc-web
+        run: argocd app wait hello-chart-app --health --operation --timeout 90 --grpc-web
 
       # --- No separate cleanup step needed due to the custom action's 'post' hook ---
