@@ -1,5 +1,5 @@
 image:
-  repository: alkon100/hello-world # Must match DockerHub push
+  repository: nginxdemos/hello #alkon100/hello-world # Must match DockerHub push
   tag: latest
   pullPolicy: IfNotPresent
 
@@ -9,13 +9,13 @@ service:
   type: ClusterIP # works with Ingress
   port: 80
 
-ingress:
-  enabled: true
-  className: nginx
-  annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
-  hosts:
-    - host: hello.192-168-65-3.nip.io
-      paths:
-        - path: /
-          pathType: Prefix
+#ingress:
+#  enabled: true
+#  className: nginx
+#  annotations:
+#    nginx.ingress.kubernetes.io/rewrite-target: /
+#  hosts:
+#    - host: hello.192-168-65-3.nip.io
+#      paths:
+#        - path: /
+#          pathType: Prefix
