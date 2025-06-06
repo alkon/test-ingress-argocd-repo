@@ -95,6 +95,14 @@ jobs:
           name: chart-version
           path: .
 
+      # --- TEMPORARY DEBUG STEP ---
+      - name: Debug - List Chart Version Artifact Contents
+        run: |
+          echo "Listing contents of 'chart-version/' directory:"
+          ls -R chart-version/
+          echo "--- End of Listing ---"
+      # --- END TEMPORARY DEBUG STEP ---
+
       - name: Set up Kubeconfig for K3D Cluster
         run: |
           mkdir -p ~/.kube
