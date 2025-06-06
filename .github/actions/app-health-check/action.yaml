@@ -1,0 +1,111 @@
+# .github/actions/app-health-check/action.yml
+name: "Argo CD App Health Check & Diagnostics"
+description: "Waits for Argo CD application health and provides diagnostic information if it fails to become healthy."
+
+inputs:
+  app-name:
+    description: "Name of the Argo CD application (e.g., hello-chart-app)."
+    required: true
+  app-namespace:
+    description: "The Kubernetes namespace where the application's main resources (e.g., Deployments, Pods) are actually deployed (e.g., hello-chart)."
+    required: true
+  wait-timeout:
+    description: "Timeout in seconds for 'argocd app wait' (e.g., 90)."
+    required: false
+    default: "90"
+  argocd-server-address:
+    description: "The address of the Argo CD API server (e.g., localhost:8443)."
+    required: true
+  argocd-username:
+    description: "The username for Argo CD authentication (e.g., admin)."
+    required: true
+  argocd-password:
+    description: "The password for Argo CD authentication."
+    required: true
+
+runs:
+  using: "composite" # This indicates it's a composite run action
+  steps:
+    - name: Login to Argo CD for Health Check
+      shell: bash
+      run: |
+        # Perform Argo CD login using provided credentials
+        argocd login ${{ inputs.argocd-server-address }} \
+          --insecure --grpc-web \
+          --username ${{ inputs.argocd-username }} \
+          --password ${{ inputs.argocd-password }}
+
+    - name: Wait for Argo CD Application Health
+      id: wait_health # Assign an ID to this step to check its outcome later
+      shell: bash
+      # Use `|| true` to prevent this step from failing immediately,
+      # allowing the diagnostic step to run on failure.
+      # The main workflow job will still fail if this step's output indicates failure.
+      run: |
+        argocd app wait ${{ inputs.app-name }} --health --operation --timeout ${{ inputs.wait-timeout }} --grpc-web || true
+
+        # Check the exit code of the 'argocd app wait' command.
+        # If it's non-zero (meaning it failed or timed out),
+        # set a step output to indicate failure for the diagnostic step.
+        if [ $? -ne 0 ]; then
+          echo "wait_failed=true" >> $GITHUB_OUTPUT
+        else
+          echo "wait_failed=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Diagnose Application Health Failure
+      # This step will only run if the 'wait_health' step indicated a failure
+      if: ${{ steps.wait_health.outputs.wait_failed == 'true' }}
+      shell: bash
+      run: |
+        echo "--- DIAGNOSTIC INFORMATION FOR APP: ${{ inputs.app-name }} ---"
+        echo "Application '${{ inputs.app-name }}' in namespace '${{ inputs.app-namespace }}' did not become healthy within ${{ inputs.wait-timeout }} seconds."
+        echo "Attempting to gather diagnostic logs from the cluster:"
+        echo ""
+
+        echo "1. Argo CD Application Sync and Health Status:"
+        # Use || true to ensure these diagnostic commands don't cause the diagnostic step to fail
+        argocd app history ${{ inputs.app-name }} --grpc-web || echo "Failed to get Argo CD app history."
+        echo ""
+        argocd app get ${{ inputs.app-name }} -o yaml --grpc-web || echo "Failed to get Argo CD app details."
+        echo ""
+
+        echo "2. Argo CD Application Events:"
+        argocd app events ${{ inputs.app-name }} --grpc-web || echo "Failed to get Argo CD app events."
+        echo ""
+
+        echo "3. Kubernetes Deployment Status for associated resources in namespace ${{ inputs.app-namespace }}:"
+        kubectl get deployments -n ${{ inputs.app-namespace }} -o wide || echo "Failed to get deployments in namespace ${{ inputs.app-namespace }}."
+        echo ""
+
+        echo "4. Kubernetes Pod Status in target namespace ${{ inputs.app-namespace }}:"
+        kubectl get pods -n ${{ inputs.app-namespace }} -o wide || echo "Failed to get pods in namespace ${{ inputs.app-namespace }}."
+        echo ""
+
+        echo "5. Detailed Pod Information (for any problematic pods):"
+        # Use 'jq' to filter for pods that are not Running/Ready or are in CrashLoopBackOff/ImagePullBackOff
+        # Ensure jq is installed on your self-hosted runner!
+        PROBLEM_POD_NAMES=$(kubectl get pods -n ${{ inputs.app-namespace }} -o json | jq -r '.items[] | select(.status.phase != "Running" or (.status.containerStatuses | length > 0 and .[].ready != true) or (.status.containerStatuses | length > 0 and .[].state.waiting.reason | IN("CrashLoopBackOff", "ImagePullBackOff"))) | .metadata.name')
+
+        if [ -n "$PROBLEM_POD_NAMES" ]; then
+          echo "Identified problematic pods: $PROBLEM_POD_NAMES"
+          for POD_NAME in $PROBLEM_POD_NAMES; do
+            echo "--- Describing Pod: $POD_NAME ---"
+            kubectl describe pod "$POD_NAME" -n ${{ inputs.app-namespace }} || echo "Failed to describe pod $POD_NAME."
+            echo "--- Logs for Pod: $POD_NAME (last 50 lines) ---"
+            # Attempt to get logs for all containers in the pod
+            CONTAINER_NAMES=$(kubectl get pod "$POD_NAME" -n ${{ inputs.app-namespace }} -o json | jq -r '.spec.containers[].name')
+            for CONTAINER_NAME in $CONTAINER_NAMES; do
+              echo "--- Container: $CONTAINER_NAME ---"
+              kubectl logs "$POD_NAME" -c "$CONTAINER_NAME" -n ${{ inputs.app-namespace }} --tail=50 || echo "Failed to get logs for container $CONTAINER_NAME in pod $POD_NAME."
+            done
+            echo ""
+          done
+        else
+          echo "No immediately problematic pods (e.g., CrashLoopBackOff, ImagePullBackOff, Not Ready) identified to describe/log in detail."
+        fi
+
+        echo "--- END DIAGNOSTIC INFORMATION ---"
+        # Important: Exit with a non-zero code to ensure the main workflow job also fails if this diagnostic runs,
+        # indicating the application deployment was not successful.
+        exit 1
