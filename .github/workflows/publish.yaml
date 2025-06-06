@@ -99,7 +99,7 @@ jobs:
         run: |
           mkdir -p ~/.kube
           # Directly write the pre-configured Kubeconfig content from your GitHub Secret
-          echo "${{ secrets.KUBECONFIG_CONTENT }}" > ~/.kube/config
+          echo "${{ secrets.KUBECONFIG }}" > ~/.kube/config
           chmod 600 ~/.kube/config
           # Set KUBECONFIG env var for all subsequent steps in this job.
           echo "KUBECONFIG=$HOME/.kube/config" >> $GITHUB_ENV
