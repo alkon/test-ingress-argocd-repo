@@ -30,25 +30,16 @@ runs:
     # -------------------------------------------------------------
     # Main Step: Start the port-forwarding process in the background
     # -------------------------------------------------------------
+    # Change the 'Start Port Forward' step to save PID to a file
     - name: Start Port Forward
       shell: bash
       run: |
         echo "Starting port-forward: ${{ inputs.service }} in namespace ${{ inputs.namespace }} from localhost:${{ inputs.local-port }} to service:${{ inputs.remote-port }}"
-
-        # Run kubectl port-forward in the background and capture its PID
         kubectl port-forward -n ${{ inputs.namespace }} service/${{ inputs.service }} ${{ inputs.local-port }}:${{ inputs.remote-port }} &
-        PF_PID=$! # Capture the PID of the last background command
-
+        PF_PID=$!
         echo "Port-forwarding process started with PID: $PF_PID"
-
-        # IMPORTANT: Store the PID in GITHUB_STATE so the 'post' hook can access it for cleanup.
-        # GITHUB_STATE is specifically designed for passing state between 'main' and 'post' hooks within the same action.
-        echo "pf_pid=$PF_PID" >> $GITHUB_STATE
-
-        # Also, set it in GITHUB_ENV for any subsequent steps within the same job
-        # that might explicitly need access to the PID, though the argocd login
-        # and sync commands don't directly use it (they use localhost:port).
-        echo "PF_PID=$PF_PID" >> $GITHUB_ENV
+        # Save PID to a temporary file accessible by the post hook
+        echo "$PF_PID" > "${HOME}/.port_forward_pid.txt"
 
     # -------------------------------------------------------------
     # Step: Wait for the port-forwarding tunnel to be ready
@@ -84,18 +75,18 @@ post:
   - name: Stop Port Forward
     shell: bash
     run: |
-      # Retrieve the PID from GITHUB_STATE
-      PF_PID=$(echo "${{ github.state.pf_pid }}")
-
-      if [ -n "$PF_PID" ]; then
-        echo "Attempting to stop port-forwarding process (PID: $PF_PID)..."
-        # Check if the process is still running before attempting to kill it
+      # Read the PID from the temporary file
+      PF_PID_FILE="${HOME}/.port_forward_pid.txt"
+      if [ -f "$PF_PID_FILE" ]; then
+        PF_PID=$(cat "$PF_PID_FILE")
+        echo "Attempting to stop port-forwarding process (PID: $PF_PID) from file..."
         if kill -0 "$PF_PID" >/dev/null 2>&1; then
           kill "$PF_PID"
           echo "Port-forwarding stopped successfully."
         else
-          echo "Port-forwarding process (PID: $PF_PID) already terminated or not found. No action needed."
+          echo "Port-forwarding process (PID: $PF_PID) already terminated or not found."
         fi
+        rm -f "$PF_PID_FILE" # Clean up the PID file
       else
-        echo "No port-forwarding process PID found in state. Skipping termination."
+        echo "No port-forwarding process PID file found, skipping termination."
       fi

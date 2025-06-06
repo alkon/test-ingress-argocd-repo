@@ -81,59 +81,59 @@ jobs:
           CHART_PACKAGE=$(helm package "$CHART_DIR" --destination . | awk '{print $NF}')
           helm push "$CHART_PACKAGE" "oci://registry-1.docker.io/${{ secrets.DOCKERHUB_USERNAME }}" # Added quotes around OCI URL for robustness
 
-#  deploy:
-#    runs-on: self-hosted
-#    needs: build-and-publish
-#
-#    steps:
-#      - name: Checkout code
-#        uses: actions/checkout@v4
-#
-#      - name: Download Chart Version Artifact
-#        uses: actions/download-artifact@v4
-#        with:
-#          name: chart-version
-#          path: .
-#
-#      - name: Set up Kubeconfig for K3D Cluster
-#        run: |
-#          mkdir -p ~/.kube
-#          echo "${{ secrets.KUBECONFIG_CONTENT }}" > ~/.kube/config
-#          chmod 600 ~/.kube/config
-#          # Set KUBECONFIG env var for all subsequent steps in this job,
-#          # including calls to your custom action.
-#          echo "KUBECONFIG=$HOME/.kube/config" >> $GITHUB_ENV
-#
-#      - name: Get Argo CD Admin Password
-#        id: get_argocd_password
-#        run: |
-#          ARGOCD_ADMIN_PASSWORD=$(kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.password}' | base64 -d)
-#          echo "argocd_password=$ARGOCD_ADMIN_PASSWORD" >> "$GITHUB_OUTPUT"
-#          echo "Argo CD admin password retrieved successfully."
-#        timeout-minutes: 1
-#
-#
-#      - name: Start ArgoCD Service Port Forward
-#        uses: ./.github/actions/kubectl-port-forward # Path to your custom action
-#        with:
-#          service: argocd-server
-#          namespace: argocd
-#          local-port: 8443
-#          remote-port: 443
-#          wait-for-ready: true
-#          timeout: 60
-#
-#      - name: Login to Argo CD via Port Forward
-#        run: |
-#          argocd login localhost:8443 \
-#            --insecure --grpc-web \
-#            --username admin \
-#            --password ${{ steps.get_argocd_password.outputs.argocd_password }}
-#
-#      - name: Sync Application via Port Forward
-#        run: argocd app sync hello-chart-app --grpc-web
-#
-#      - name: Wait for Health via Port Forward
-#        run: argocd app wait hello-chart-app --health --operation --timeout 90s --grpc-web
+  deploy:
+    runs-on: self-hosted
+    needs: build-and-publish
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Chart Version Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: chart-version
+          path: .
+
+      - name: Set up Kubeconfig for K3D Cluster
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" > ~/.kube/config
+          chmod 600 ~/.kube/config
+          # Set KUBECONFIG env var for all subsequent steps in this job,
+          # including calls to your custom action.
+          echo "KUBECONFIG=$HOME/.kube/config" >> $GITHUB_ENV
+
+      - name: Get Argo CD Admin Password
+        id: get_argocd_password
+        run: |
+          ARGOCD_ADMIN_PASSWORD=$(kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.password}' | base64 -d)
+          echo "argocd_password=$ARGOCD_ADMIN_PASSWORD" >> "$GITHUB_OUTPUT"
+          echo "Argo CD admin password retrieved successfully."
+        timeout-minutes: 1
+
+
+      - name: Start ArgoCD Service Port Forward
+        uses: ./.github/actions/kubectl-port-forward # Path to your custom action
+        with:
+          service: argocd-server
+          namespace: argocd
+          local-port: 8443
+          remote-port: 443
+          wait-for-ready: true
+          timeout: 60
+
+      - name: Login to Argo CD via Port Forward
+        run: |
+          argocd login localhost:8443 \
+            --insecure --grpc-web \
+            --username admin \
+            --password ${{ steps.get_argocd_password.outputs.argocd_password }}
+
+      - name: Sync Application via Port Forward
+        run: argocd app sync hello-chart-app --grpc-web
+
+      - name: Wait for Health via Port Forward
+        run: argocd app wait hello-chart-app --health --operation --timeout 90s --grpc-web
 
       # --- No separate cleanup step needed due to the custom action's 'post' hook ---
