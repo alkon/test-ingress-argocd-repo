@@ -96,7 +96,7 @@ jobs:
           path: .
 
       # --- TEMPORARY DEBUG STEP ---
-      - name: Debug: List Current Directory Contents
+      - name: Debug List Current Directory Contents
         run: |
           echo "Listing contents of current directory ('.'):"
           ls -F  # -F adds indicators like / for directories
