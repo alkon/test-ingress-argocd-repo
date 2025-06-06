@@ -5,22 +5,23 @@ FROM python:3.9-slim-buster
 WORKDIR /app
 
 # Copy only requirements.txt first to leverage Docker layer caching.
-# Since the build context is 'app', requirements.txt is directly in '.'
+# Make sure gunicorn is listed in your requirements.txt
 COPY requirements.txt .
 
-# Install Python dependencies
+# Install Python dependencies, including Gunicorn
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy your application code.
-# main.py is also directly in '.' because the build context is 'app'.
+# Copy your Flask application code
 COPY main.py .
 
-# Expose the port your Flask app listens on (assuming 5000 as discussed)
+# Expose the port your Flask app listens on.
+# This should match the port configured in main.py (5000).
 EXPOSE 5000
 
-# Command to run your Flask application using Gunicorn
-# This assumes your Flask app instance is named 'app' in main.py
-# Make sure 'gunicorn' is in your requirements.txt
-#CMD ["gunicorn", "-b", "0.0.0.0:5000", "main:app"]
+# Command to run your Flask application using Gunicorn.
+# This is the stable, production-ready way to serve a Flask app.
+# "main:app" refers to the 'app' Flask instance in your 'main.py' file.
+CMD ["gunicorn", "-b", "0.0.0.0:5000", "main:app"]
 
-CMD ["python", "main.py"]
+# The previous CMD ["python", "main.py"] uses Flask's development server,
+# which is not suitable for production deployments and can cause instability.

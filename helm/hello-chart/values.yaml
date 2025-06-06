@@ -1,12 +1,12 @@
 image:
-  repository: nginxdemos/hello #alkon100/hello-world # Must match DockerHub push
+  repository: alkon100/hello-world # nginxdemos/hello
   tag: latest
   pullPolicy: IfNotPresent
 
 replicaCount: 1
 
 service:
-  type: ClusterIP # works with Ingress
+  type: ClusterIP # also works with Ingress
   port: 80
 
 #ingress:
