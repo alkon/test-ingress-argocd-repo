@@ -96,11 +96,11 @@ jobs:
           path: .
 
       # --- TEMPORARY DEBUG STEP ---
-      - name: Debug List Current Directory Contents
-        run: |
-          echo "Listing contents of current directory ('.'):"
-          ls -F  # -F adds indicators like / for directories
-          echo "--- End of Listing ---"
+#      - name: Debug List Current Directory Contents
+#        run: |
+#          echo "Listing contents of current directory ('.'):"
+#          ls -F  # -F adds indicators like / for directories
+#          echo "--- End of Listing ---"
       # --- END TEMPORARY DEBUG STEP ---
 
       - name: Set up Kubeconfig for K3D Cluster
@@ -140,7 +140,7 @@ jobs:
           KUBECONFIG: ${{ env.KUBECONFIG }}
         run: |
           # Read CHART_VERSION from the artifact
-          CHART_VERSION=$(cat chart-version/chart_version.txt)
+          CHART_VERSION=$(cat chart_version.txt)
           echo "Detected CHART_VERSION: $CHART_VERSION"
           
           # Use sed (or envsubst if installed) to replace placeholders and create the final manifest
