@@ -139,14 +139,14 @@ jobs:
         run: argocd app sync hello-chart-app --grpc-web
 
       - name: Check Application Health (with Diagnostics)
-          uses: ./.github/actions/app-health-check # Path to your new custom action
-          with:
-            app-name: hello-chart-app # The name of your Argo CD application
-            app-namespace: hello-chart # The Kubernetes namespace where your app's resources are deployed
-            wait-timeout: 90 # Timeout in seconds for the health check (adjust as needed)
-            argocd-server-address: localhost:8443 # The address where Argo CD is accessible via port-forward
-            argocd-username: admin # Your Argo CD admin username
-            argocd-password: ${{ steps.get_argocd_password.outputs.argocd_password }} # The password retrieved from the previous step
+        uses: ./.github/actions/app-health-check # Path to your new custom action
+        with:
+          app-name: hello-chart-app # The name of your Argo CD application
+          app-namespace: hello-chart # The Kubernetes namespace where your app's resources are deployed
+          wait-timeout: 90 # Timeout in seconds for the health check (adjust as needed)
+          argocd-server-address: localhost:8443 # The address where Argo CD is accessible via port-forward
+          argocd-username: admin # Your Argo CD admin username
+          argocd-password: ${{ steps.get_argocd_password.outputs.argocd_password }} # The password retrieved from the previous step
 
 #      - name: Wait for Health via Port Forward
 #        run: argocd app wait hello-chart-app --health --operation --timeout 90 --grpc-web
