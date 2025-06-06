@@ -140,7 +140,7 @@ jobs:
           KUBECONFIG: ${{ env.KUBECONFIG }}
         run: |
           # Read CHART_VERSION from the artifact
-          CHART_VERSION=$(cat chart_version.txt)
+          CHART_VERSION=$(cat chart-version.txt)
           echo "Detected CHART_VERSION: $CHART_VERSION"
           
           # Use sed (or envsubst if installed) to replace placeholders and create the final manifest
