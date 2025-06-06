@@ -7,10 +7,34 @@ on:
   workflow_dispatch:
 
 jobs:
+
+  lint:
+    name: Lint (${{ matrix.python-version }})
+    runs-on: self-hosted
+    strategy:
+      matrix:
+        python-version: [ "3.12", "3.13", "3.14" ]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python and Install Dependencies
+        uses: ./.github/actions/setup-python-and-deps-for-lint # <--- Here's the custom action usage
+        with:
+          python-version: ${{ matrix.python-version }}
+          requirements-path: app/requirements.txt # <--- Passing the input to the custom action
+
+      - name: Run Pylint
+        run: |
+          echo "Running Pylint on Python ${{ matrix.python-version }}..."
+          pylint app/main.py --fail-under=7.0
+          echo "Pylint check completed."
+        continue-on-error: true
+
   build-and-publish:
     runs-on: self-hosted
-    #    outputs: # This section is commented out, so its indentation doesn't matter much,
-    #      chart-version: ${{ steps.set-version.outputs.chart-version }} # but if uncommented, ensure it aligns with 'outputs:'
+    needs: lint
 
     steps:
       - name: Checkout Code

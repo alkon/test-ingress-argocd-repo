@@ -1,0 +1,28 @@
+# .github/actions/setup-python-and-deps-for-lint/action.yml
+name: "Set up Python and Install Dependencies for Linting"
+description: "Sets up a specified Python version and installs project/linting dependencies."
+
+inputs:
+  python-version:
+    description: "The Python version to set up"
+    required: true
+  requirements-path:
+    description: "Path to the project's requirements.txt file"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python ${{ inputs.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: 'pip'
+        cache-dependency-path: ${{ inputs.requirements-path }}
+
+    - name: Install dependencies (Pylint and application requirements)
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install pylint
+        pip install -r ${{ inputs.requirements-path }}
