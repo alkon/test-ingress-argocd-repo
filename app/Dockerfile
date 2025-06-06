@@ -21,4 +21,6 @@ EXPOSE 5000
 # Command to run your Flask application using Gunicorn
 # This assumes your Flask app instance is named 'app' in main.py
 # Make sure 'gunicorn' is in your requirements.txt
-CMD ["gunicorn", "-b", "0.0.0.0:5000", "main:app"]
+#CMD ["gunicorn", "-b", "0.0.0.0:5000", "main:app"]
+
+CMD ["python", "main.py"]
