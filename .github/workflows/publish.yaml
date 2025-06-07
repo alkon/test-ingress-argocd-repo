@@ -23,20 +23,20 @@ jobs:
       matrix:
         python-version: [ "3.12", "3.13" ]
 
-    test:
-      # Call the reusable workflow for testing
-      uses: ./.github/workflows/reusable-python-job.yaml
-      with:
-        job-name: Test
-        python-version: ${{ matrix.python-version }}
-        requirements-path: app/requirements.txt
-        # Pass the Pytest command as the task-script
-        task-script: |
-          pytest app/ # Adjust 'app/' to the correct path for your tests
-        job-timeout-minutes: 20 # Override default timeout if needed
-      strategy:
-        matrix:
-          python-version: [ "3.12", "3.13" ]
+  test:
+    # Call the reusable workflow for testing
+    uses: ./.github/workflows/reusable-python-job.yaml
+    with:
+      job-name: Test
+      python-version: ${{ matrix.python-version }}
+      requirements-path: app/requirements.txt
+      # Pass the Pytest command as the task-script
+      task-script: |
+        pytest app/ # Adjust 'app/' to the correct path for your tests
+      job-timeout-minutes: 20 # Override default timeout if needed
+    strategy:
+      matrix:
+        python-version: [ "3.12", "3.13" ]
 
   build-and-publish:
     runs-on: self-hosted
