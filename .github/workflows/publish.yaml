@@ -82,19 +82,16 @@ jobs:
 
       # --- NEW STEP: Extract Docker Image Metadata (now using the dynamic chart name) ---
       - name: Extract Docker Image Metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ steps.chart.outputs.name }}
-          tags: |
-            type=sha,format=short
-            type=raw,value=${{ steps.chart.outputs.version }},enable=${{ steps.chart.outputs.version != '' }}
-            type=ref,event=branch
-            type=ref,event=pr
-            # The 'enable' condition should be directly a boolean expression
-            # Use 'github.ref == 'refs/heads/main'' for exact branch matching
-            # and wrap the entire expression in an interpolation block ${{ ... }}
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' }}  
+          id: meta
+          uses: docker/metadata-action@v5
+          with:
+            images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ steps.chart.outputs.name }}
+            tags: |
+              type=sha,format=short
+              type=raw,value=${{ steps.chart.outputs.version }},enable=${{ steps.chart.outputs.version != '' }}
+              type=ref,event=branch
+              type=ref,event=pr
+              type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' }}  
 
       - name: Build and Push Docker Image to Docker Hub
         uses: docker/build-push-action@v5
