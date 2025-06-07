@@ -1,5 +1,5 @@
 image:
-  repository: alkon100/hello-world # nginxdemos/hello
+  repository: alkon100/hello-chart # nginxdemos/hello
   tag: latest
   pullPolicy: Always #IfNotPresent
 
