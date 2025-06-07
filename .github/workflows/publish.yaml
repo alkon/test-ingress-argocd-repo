@@ -26,7 +26,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           requirements-path: app/requirements.txt
-          timeout-minutes: 15 # Adjust as needed
+          install-python-timeout: 15
 
       - name: Run Pylint
         run: |

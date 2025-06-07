@@ -1,4 +1,3 @@
-# ./.github/actions/manual-python-setup/action.yml
 name: 'Pyenv Python Setup and Dependencies'
 description: 'Sets up Python using pyenv and installs dependencies.'
 inputs:
@@ -8,6 +7,12 @@ inputs:
   requirements-path:
     description: 'Path to the requirements.txt file (e.g., "app/requirements.txt").'
     required: true
+  # Add timeout-minutes as an input to your custom action
+  # This allows you to pass the value from your main workflow
+  install-python-timeout:
+    description: 'Timeout in minutes for the Python installation step.'
+    required: false # Make it optional
+    default: '15' # Set a default value if not provided
 
 runs:
   using: "composite"
@@ -15,50 +20,54 @@ runs:
     - name: Export Pyenv Base Environment Variables
       shell: bash
       run: |
-        # These are simple key=value pairs, correctly exported to GITHUB_ENV
         echo "PYENV_ROOT=$HOME/.pyenv" >> $GITHUB_ENV
         echo "PATH=$HOME/.pyenv/bin:$PATH" >> $GITHUB_ENV
-        
         echo "Pyenv base environment variables (PYENV_ROOT, PATH) exported for subsequent steps."
 
     - name: Install Python via pyenv
       shell: bash
+      # Apply timeout-minutes directly to this step
+      timeout-minutes: ${{ inputs.install-python-timeout }} # Use the input here
       run: |
-        # CRUCIAL: Evaluate pyenv init for this specific step's shell context.
-        # This must be at the beginning of any 'run' block that uses pyenv commands or the installed Python.
         eval "$(pyenv init --path)"
-        eval "$(pyenv virtualenv-init -)" # Only if you use pyenv virtualenvs
+        # eval "$(pyenv virtualenv-init -)" # Keep if using pyenv virtualenvs
         
         PYTHON_VERSION="${{ inputs.python-version }}"
         echo "Attempting to install Python $PYTHON_VERSION via pyenv..."
         
-        # Check if Python version is already installed by pyenv
-        if pyenv versions --bare | grep -q "^$PYTHON_VERSION$"; then
-          echo "Python $PYTHON_VERSION is already installed via pyenv. Skipping installation."
+        INSTALLED_VERSION=$(pyenv versions --bare | grep "^$PYTHON_VERSION" | head -n 1)
+
+        if [[ -n "$INSTALLED_VERSION" ]]; then
+          echo "Python $INSTALLED_VERSION (matching $PYTHON_VERSION) is already installed via pyenv. Skipping installation."
         else
-          # Install the specific Python version
-          # This might take a while as pyenv downloads and compiles/installs Python
-          pyenv install "$PYTHON_VERSION"
+          echo "Python $PYTHON_VERSION not found, installing..."
+          if ! pyenv install "$PYTHON_VERSION"; then
+            echo "Error: pyenv installation of Python $PYTHON_VERSION failed."
+            exit 1
+          fi
+          echo "Python $PYTHON_VERSION installed successfully."
         fi
         
-        # Set the local Python version for this directory/job
-        # This creates a .python-version file in your GITHUB_WORKSPACE
-        pyenv local "$PYTHON_VERSION"
+        if ! pyenv local "$PYTHON_VERSION"; then
+          echo "Error: Failed to set pyenv local to $PYTHON_VERSION."
+          exit 1
+        fi
         echo "pyenv local set to $PYTHON_VERSION"
         
-        # Verify Python version
         echo "Verifying Python version:"
         python --version
-        python3 --version # Often preferred on macOS/Linux
+        python3 --version
         pip --version
 
     - name: Install Python Dependencies
       shell: bash
       run: |
-        # CRUCIAL: Re-evaluate pyenv init for this specific step's shell context
         eval "$(pyenv init --path)"
-        eval "$(pyenv virtualenv-init -)" # Only if you use pyenv virtualenvs
+        # eval "$(pyenv virtualenv-init -)" # Keep if using pyenv virtualenvs
         
         echo "Installing Python dependencies from ${{ inputs.requirements-path }}..."
-        pip install -r ${{ inputs.requirements-path }}
+        if ! pip install -r ${{ inputs.requirements-path }}; then
+          echo "Error: Failed to install Python dependencies from ${{ inputs.requirements-path }}."
+          exit 1
+        fi
         echo "Dependencies installed."
