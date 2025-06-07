@@ -52,10 +52,12 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      #      - name: Build and Push Docker Image to Docker Hub # This block was commented out, leaving it as is.
-      #        run: |
-      #          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/hello-world:latest ./app
-      #          docker push ${{ secrets.DOCKERHUB_USERNAME }}/hello-world:latest
+      - name: Clear Docker Buildx Cache
+        run: |
+          docker buildx prune -f
+          echo "Docker Buildx cache cleared."
+        # This step doesn't necessarily need to fail the job if prune fails,
+        # but it's good to ensure it runs.
 
       - name: Build and Push Docker Image to Docker Hub
         uses: docker/build-push-action@v5
