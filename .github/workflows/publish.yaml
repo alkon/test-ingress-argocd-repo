@@ -13,7 +13,7 @@ jobs:
     runs-on: self-hosted
     strategy:
       matrix:
-        python-version: [ "3.13" ]
+        python-version: [ "3.12", "3.13" ]
     env:
       AGENT_TOOLSDIRECTORY: /Users/alex/PycharmProjects/test-ingress-argocd-prj/actions-runner/_work/_toolcache
 
@@ -21,35 +21,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-#      - name: Debug Environment Variable
-#        run: |
-#          echo "Checking AGENT_TOOLSDIRECTORY..."
-#          echo "Value: $AGENT_TOOLSDIRECTORY"
-#          # Also check other relevant paths
-#          echo "HOME: $HOME"
-#          echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
-#          ls -ld "$AGENT_TOOLSDIRECTORY" || echo "Toolcache directory does not exist or is not accessible."
-#        shell: bash # Explicitly use bash to ensure environment variable expansion
-
-
-#      - name: Set up Python
-#        uses: actions/setup-python@v5
-#        with:
-#          python-version: ${{ matrix.python-version }}
-#          cache: 'pip' # Recommended for caching pip dependencies
-#
-#      - name: Install Dependencies
-#        run: |
-#          pip install -r app/requirements.txt
-
       - name: Set up Python and Install Dependencies (Custom Manual Action)
         uses: ./.github/actions/setup-python-and-deps-for-lint # <--- Using your new custom action
         with:
           python-version: ${{ matrix.python-version }}
           requirements-path: app/requirements.txt
-          # IMPORTANT: Use the exact download URL for Python 3.13 Darwin x64 from your logs!
-          # You found it here: https://github.com/actions/python-versions/releases/download/3.13.4-15433317575/python-3.13.4-darwin-x64.tar.gz
-          python-download-url: https://github.com/actions/python-versions/releases/download/3.13.4-15433317575/python-3.13.4-darwin-x64.tar.gz
+          python-version: ${{ matrix.python-version }}
 
       - name: Run Pylint
         run: |

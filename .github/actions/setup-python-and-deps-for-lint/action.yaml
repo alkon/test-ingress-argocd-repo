@@ -1,4 +1,4 @@
-# ./.github/actions/setup-python-and-deps-for-lint/action.yml
+# ./.github/actions/manual-python-setup/action.yml
 name: 'Manual Python Setup and Dependencies'
 description: 'Manually sets up a specified Python version and installs dependencies.'
 inputs:
@@ -8,13 +8,47 @@ inputs:
   requirements-path:
     description: 'Path to the requirements.txt file (e.g., "app/requirements.txt").'
     required: true
-  python-download-url:
-    description: 'Direct download URL for the Python tar.gz archive. Required for manual setup.'
-    required: true
+  # Removed: python-download-url input
 
 runs:
   using: "composite"
   steps:
+    - name: Determine Python Download URL
+      shell: bash
+      run: |
+        PYTHON_VERSION="${{ inputs.python-version }}"
+        PYTHON_OS="darwin-x64" # Based on your runner's OS
+        PYTHON_DOWNLOAD_URL=""
+
+        # --- IMPORTANT: You MUST update this section for any new Python versions you want to support ---
+        case "$PYTHON_VERSION" in
+          "3.13")
+            # This is the exact URL you've been using for 3.13
+            PYTHON_DOWNLOAD_URL="https://github.com/actions/python-versions/releases/download/3.13.4-15433317575/python-3.13.4-darwin-x64.tar.gz"
+            ;;
+          "3.12")
+            # Example for Python 3.12. You'll need to find the correct URL from
+            # https://github.com/actions/python-versions/releases (look for 3.12.x-yyyyy tags)
+            # This URL is an EXAMPLE and might need to be replaced with the actual one.
+            PYTHON_DOWNLOAD_URL="https://github.com/actions/python-versions/releases/download/3.12.4-1718163013/python-3.12.4-darwin-x64.tar.gz"
+            ;;
+          # Add more cases for other Python versions as needed
+          # "3.11")
+          #   PYTHON_DOWNLOAD_URL="https://example.com/path/to/python-3.11.x-darwin-x64.tar.gz"
+          #   ;;
+          *)
+            echo "Error: Unsupported Python version: $PYTHON_VERSION. Please add its download URL to the action."
+            exit 1
+            ;;
+        esac
+
+        if [ -z "$PYTHON_DOWNLOAD_URL" ]; then
+          echo "Error: Python download URL could not be determined for version $PYTHON_VERSION."
+          exit 1
+        fi
+
+        echo "PYTHON_DOWNLOAD_URL=$PYTHON_DOWNLOAD_URL" >> $GITHUB_ENV # Make URL available for next step
+
     - name: Create Python Install Directory
       shell: bash
       run: |
@@ -27,7 +61,7 @@ runs:
       shell: bash
       run: |
         PYTHON_INSTALL_DIR="${{ env.PYTHON_INSTALL_DIR }}"
-        PYTHON_DOWNLOAD_URL="${{ inputs.python-download-url }}"
+        PYTHON_DOWNLOAD_URL="${{ env.PYTHON_DOWNLOAD_URL }}" # Use the URL determined in the previous step
         echo "Downloading Python from: $PYTHON_DOWNLOAD_URL"
         curl -L "$PYTHON_DOWNLOAD_URL" -o python.tar.gz
         echo "Extracting Python to $PYTHON_INSTALL_DIR..."
@@ -38,18 +72,34 @@ runs:
       shell: bash
       run: |
         PYTHON_INSTALL_DIR="${{ env.PYTHON_INSTALL_DIR }}"
-        # Adjust this find command based on where the python executable is inside the extracted archive.
-        # Common paths: {extracted_dir}/bin/python3.13, {extracted_dir}/python.framework/Versions/3.13/bin/python3.13
-        # We'll use a robust find, but you might need to fine-tune if it fails.
+        
+        # --- Try finding the executable more robustly ---
+        PYTHON_EXECUTABLE_PATH=""
+
+        # Attempt 1: Common Linux/simple structure (e.g., bin/python3.13)
         PYTHON_EXECUTABLE_PATH=$(find "$PYTHON_INSTALL_DIR" -name "python${{ inputs.python-version }}" -type f -print -quit)
 
+        # Attempt 2: macOS framework structure (e.g., python.framework/Versions/3.13/bin/python3.13)
         if [ -z "$PYTHON_EXECUTABLE_PATH" ]; then
-            # Fallback for common MacOS framework structure
-            PYTHON_EXECUTABLE_PATH=$(find "$PYTHON_INSTALL_DIR" -name "python3" -type f -path "*/Versions/${{ inputs.python-version }}/*" -print -quit)
+            PYTHON_EXECUTABLE_PATH=$(find "$PYTHON_INSTALL_DIR" -type f -name "python${{ inputs.python-version }}" -path "*/Versions/${{ inputs.python-version }}/*" -print -quit)
         fi
 
+        # Attempt 3: General "python3" if specific version not found (common for symlinks)
         if [ -z "$PYTHON_EXECUTABLE_PATH" ]; then
-            echo "Error: Could not find Python executable for version ${{ inputs.python-version }}."
+            PYTHON_EXECUTABLE_PATH=$(find "$PYTHON_INSTALL_DIR" -name "python3" -type f -print -quit)
+        fi
+
+        # Attempt 4: Last resort, check for python executable directly if other versions not specified by find
+        if [ -z "$PYTHON_EXECUTABLE_PATH" ]; then
+            PYTHON_EXECUTABLE_PATH=$(find "$PYTHON_INSTALL_DIR" -name "python" -type f -print -quit)
+        fi
+        # --- End of finding executable ---
+
+
+        if [ -z "$PYTHON_EXECUTABLE_PATH" ]; then
+            echo "Error: Could not find Python executable for version ${{ inputs.python-version }} after extraction."
+            echo "Please inspect the contents of '$PYTHON_INSTALL_DIR' on your runner to determine the correct path."
+            ls -R "$PYTHON_INSTALL_DIR" # List contents for debugging
             exit 1
         fi
 
@@ -66,6 +116,5 @@ runs:
       shell: bash
       run: |
         echo "Installing Python dependencies from ${{ inputs.requirements-path }}..."
-        # Now that python is on PATH, we can simply use 'pip'
         pip install -r ${{ inputs.requirements-path }}
         echo "Dependencies installed."
