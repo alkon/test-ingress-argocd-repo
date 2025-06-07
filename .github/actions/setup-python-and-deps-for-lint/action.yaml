@@ -12,31 +12,22 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Ensure pyenv environment is active
+    - name: Export Pyenv Base Environment Variables
       shell: bash
       run: |
-        # These lines ensure pyenv is correctly initialized for the current shell
-        # within the GitHub Actions step.
-        # It's important to include them in each step that directly uses pyenv commands,
-        # or use GITHUB_ENV as shown below.
-        
-        # Ensure PYENV_ROOT is correctly set. It's usually ~/.pyenv
+        # These are simple key=value pairs, correctly exported to GITHUB_ENV
         echo "PYENV_ROOT=$HOME/.pyenv" >> $GITHUB_ENV
-        # Add pyenv's bin directory to PATH
         echo "PATH=$HOME/.pyenv/bin:$PATH" >> $GITHUB_ENV
-        # Evaluate pyenv init commands to set up shims and other environment variables
-        echo "eval \"$(pyenv init --path)\"" >> $GITHUB_ENV
-        echo "eval \"$(pyenv virtualenv-init -)\"" >> $GITHUB_ENV # Needed if you use pyenv virtualenvs
         
-        echo "Pyenv environment variables exported for subsequent steps."
+        echo "Pyenv base environment variables (PYENV_ROOT, PATH) exported for subsequent steps."
 
     - name: Install Python via pyenv
       shell: bash
       run: |
-        # Re-evaluate pyenv init for this specific step's shell context
-        # (Needed because each 'run' step gets a fresh shell instance)
+        # CRUCIAL: Evaluate pyenv init for this specific step's shell context.
+        # This must be at the beginning of any 'run' block that uses pyenv commands or the installed Python.
         eval "$(pyenv init --path)"
-        eval "$(pyenv virtualenv-init -)" # Only if you plan to use pyenv virtualenvs
+        eval "$(pyenv virtualenv-init -)" # Only if you use pyenv virtualenvs
         
         PYTHON_VERSION="${{ inputs.python-version }}"
         echo "Attempting to install Python $PYTHON_VERSION via pyenv..."
@@ -64,9 +55,9 @@ runs:
     - name: Install Python Dependencies
       shell: bash
       run: |
-        # Re-evaluate pyenv init for this specific step's shell context
+        # CRUCIAL: Re-evaluate pyenv init for this specific step's shell context
         eval "$(pyenv init --path)"
-        eval "$(pyenv virtualenv-init -)" # Only if you plan to use pyenv virtualenvs
+        eval "$(pyenv virtualenv-init -)" # Only if you use pyenv virtualenvs
         
         echo "Installing Python dependencies from ${{ inputs.requirements-path }}..."
         pip install -r ${{ inputs.requirements-path }}
