@@ -16,6 +16,7 @@ jobs:
         python-version: [ "3.12", "3.13" ]
     env:
       AGENT_TOOLSDIRECTORY: /Users/alex/PycharmProjects/test-ingress-argocd-prj/actions-runner/_work/_toolcache
+    timeout-minutes: 15
 
     steps:
       - name: Checkout code
@@ -26,7 +27,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           requirements-path: app/requirements.txt
-          install-python-timeout: 15
 
       - name: Run Pylint
         run: |

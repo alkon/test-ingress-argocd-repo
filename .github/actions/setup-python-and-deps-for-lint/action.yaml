@@ -7,12 +7,6 @@ inputs:
   requirements-path:
     description: 'Path to the requirements.txt file (e.g., "app/requirements.txt").'
     required: true
-  # Add timeout-minutes as an input to your custom action
-  # This allows you to pass the value from your main workflow
-  install-python-timeout:
-    description: 'Timeout in minutes for the Python installation step.'
-    required: false # Make it optional
-    default: '15' # Set a default value if not provided
 
 runs:
   using: "composite"
