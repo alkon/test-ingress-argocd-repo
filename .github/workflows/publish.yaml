@@ -30,10 +30,15 @@ jobs:
 
       - name: Run Pylint
         run: |
+          # CRITICAL: Re-evaluate pyenv init for this specific step's shell context
+          eval "$(pyenv init --path)"
+          # eval "$(pyenv virtualenv-init -)" # Include if you are using pyenv virtualenvs
+          
           echo "Running Pylint on Python ${{ matrix.python-version }}..."
           pylint app/main.py --fail-under=7.0
           echo "Pylint check completed."
-        continue-on-error: true
+        continue-on-error: true # Consider removing this once stable, as linting failures should break the build
+
 
   build-and-publish:
     runs-on: self-hosted
