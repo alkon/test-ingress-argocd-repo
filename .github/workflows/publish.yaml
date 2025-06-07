@@ -18,7 +18,7 @@ jobs:
       # Pass the Pylint command as the task-script
       task-script: |
         pylint app/main.py --fail-under=7.0
-      job-timeout-minutes: 30 # Override default timeout if needed
+      job-timeout-minutes: 15 # Override default timeout if needed
     strategy:
       matrix:
         python-version: [ "3.12", "3.13" ]
@@ -32,8 +32,8 @@ jobs:
       requirements-path: app/requirements.txt
       # Pass the Pytest command as the task-script
       task-script: |
-        pytest app/ # Adjust 'app/' to the correct path for your tests
-      job-timeout-minutes: 20 # Override default timeout if needed
+        pytest app/tests # Adjust to the correct path for tests
+      job-timeout-minutes: 15 # Override default timeout if needed
     strategy:
       matrix:
         python-version: [ "3.12", "3.13" ]
