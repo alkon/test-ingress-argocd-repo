@@ -1,0 +1,61 @@
+# .github/workflows/reusable-python-job.yaml
+name: Reusable Python Setup and Task
+
+on:
+  # This workflow can be called from other workflows
+  workflow_call:
+    inputs:
+      job-name:
+        description: 'Name of the specific task (e.g., Lint, Test)'
+        required: true
+        type: string
+      python-version:
+        description: 'The Python version to set up (e.g., "3.12").'
+        required: true
+        type: string
+      requirements-path:
+        description: 'Path to the requirements.txt file (e.g., "app/requirements.txt").'
+        required: true
+        type: string
+      task-script:
+        description: 'The shell script containing the task to run (e.g., "pylint app/main.py").'
+        required: true
+        type: string
+      job-timeout-minutes:
+        description: 'Timeout for the entire job in minutes.'
+        required: false
+        type: number
+        default: 30 # Default timeout if not provided
+
+jobs:
+  run-python-task:
+    # The name displayed in GitHub Actions UI for this job
+    name: ${{ inputs.job-name }} (${{ inputs.python-version }})
+    runs-on: self-hosted
+    timeout-minutes: ${{ inputs.job-timeout-minutes }}
+    env:
+      # Ensure AGENT_TOOLSDIRECTORY is passed to the reusable workflow job
+      AGENT_TOOLSDIRECTORY: /Users/alex/PycharmProjects/test-ingress-argocd-prj/actions-runner/_work/_toolcache
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python and Install Dependencies (Custom Manual Action)
+        uses: ./.github/actions/setup-python-and-deps-for-lint
+        with:
+          python-version: ${{ inputs.python-version }}
+          requirements-path: ${{ inputs.requirements-path }}
+
+      - name: Run Task Script
+        shell: bash
+        run: |
+          # CRITICAL: Re-evaluate pyenv init for this specific step's shell context
+          # This ensures the correct pyenv-managed Python and its packages (like pylint/pytest)
+          # are in the PATH for the script that follows.
+          eval "$(pyenv init --path)"
+          # eval "$(pyenv virtualenv-init -)" # Include if you are using pyenv virtualenvs
+          
+          echo "Running ${{ inputs.job-name }} with Python ${{ inputs.python-version }}..."
+          ${{ inputs.task-script }} # Execute the script passed as an input
+          echo "${{ inputs.job-name }} completed."

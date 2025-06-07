@@ -9,36 +9,34 @@ on:
 jobs:
 
   lint:
-    name: Lint (${{ matrix.python-version }})
-    runs-on: self-hosted
+    # Call the reusable workflow
+    uses: ./.github/workflows/reusable-python-job.yml
+    with:
+      job-name: Lint
+      python-version: ${{ matrix.python-version }}
+      requirements-path: app/requirements.txt
+      # Pass the Pylint command as the task-script
+      task-script: |
+        pylint app/main.py --fail-under=7.0
+      job-timeout-minutes: 30 # Override default timeout if needed
     strategy:
       matrix:
         python-version: [ "3.12", "3.13" ]
-    env:
-      AGENT_TOOLSDIRECTORY: /Users/alex/PycharmProjects/test-ingress-argocd-prj/actions-runner/_work/_toolcache
-    timeout-minutes: 15
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python and Install Dependencies (Custom Manual Action)
-        uses: ./.github/actions/setup-python-and-deps-for-lint # <--- Using your new custom action
-        with:
-          python-version: ${{ matrix.python-version }}
-          requirements-path: app/requirements.txt
-
-      - name: Run Pylint
-        run: |
-          # CRITICAL: Re-evaluate pyenv init for this specific step's shell context
-          eval "$(pyenv init --path)"
-          # eval "$(pyenv virtualenv-init -)" # Include if you are using pyenv virtualenvs
-          
-          echo "Running Pylint on Python ${{ matrix.python-version }}..."
-          pylint app/main.py --fail-under=7.0
-          echo "Pylint check completed."
-        continue-on-error: true # Consider removing this once stable, as linting failures should break the build
-
+    test:
+      # Call the reusable workflow again for testing
+      uses: ./.github/workflows/reusable-python-job.yml
+      with:
+        job-name: Test
+        python-version: ${{ matrix.python-version }}
+        requirements-path: app/requirements.txt
+        # Pass the Pytest command as the task-script
+        task-script: |
+          pytest app/ # Adjust 'app/' to the correct path for your tests
+        job-timeout-minutes: 20 # Override default timeout if needed
+      strategy:
+        matrix:
+          python-version: [ "3.12", "3.13" ]
 
   build-and-publish:
     runs-on: self-hosted
