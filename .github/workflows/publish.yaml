@@ -4,39 +4,39 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:
+  workflow_dispatch: # Allows manual trigger
 
 jobs:
+  # lint: # Commented out as per your provided YAML
+  #   uses: ./.github/workflows/reusable-python-job.yaml
+  #   with:
+  #     job-name: Lint
+  #     python-version: ${{ matrix.python-version }}
+  #     requirements-path: app/requirements.txt
+  #     task-script: |
+  #       pylint app/main.py --fail-under=7.0
+  #     job-timeout-minutes: 15
+  #   strategy:
+  #     matrix:
+  #       python-version: [ "3.12", "3.13" ]
 
-#  lint:
-#    uses: ./.github/workflows/reusable-python-job.yaml
-#    with:
-#      job-name: Lint
-#      python-version: ${{ matrix.python-version }}
-#      requirements-path: app/requirements.txt
-#      task-script: |
-#        pylint app/main.py --fail-under=7.0
-#      job-timeout-minutes: 15
-#    strategy:
-#      matrix:
-#        python-version: [ "3.12", "3.13" ]
-#
-#  test:
-#    uses: ./.github/workflows/reusable-python-job.yaml
-#    with:
-#      job-name: Test
-#      python-version: ${{ matrix.python-version }}
-#      requirements-path: app/requirements.txt
-#      task-script: |
-#        pytest app/tests # Adjust to the correct path for tests
-#      job-timeout-minutes: 15
-#    strategy:
-#      matrix:
-#        python-version: [ "3.12", "3.13" ]
+  # test: # Commented out as per your provided YAML
+  #   uses: ./.github/workflows/reusable-python-job.yaml
+  #   with:
+  #     job-name: Test
+  #     python-version: ${{ matrix.python-version }}
+  #     requirements-path: app/requirements.txt
+  #     task-script: |
+  #       pytest app/tests # Adjust to the correct path for tests
+  #     job-timeout-minutes: 15
+  #   strategy:
+  #     matrix:
+  #       python-version: [ "3.12", "3.13" ]
 
   build-and-publish:
     runs-on: self-hosted
-#    needs: lint
+    # needs: lint # Commented out as per your provided YAML. If you uncomment lint/test, uncomment this too.
+    # needs: [lint, test] # If you uncomment both lint and test
 
     steps:
       - name: Checkout Code
@@ -49,38 +49,36 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       # --- MODIFIED STEP: Extract Chart Metadata ---
-      # We need to read Chart.yaml to get the dynamic name, so we start with a known path.
-      # This assumes your main chart is always the one that the 'name' inside Chart.yaml
-      # matches the directory name itself.
+      # Corrected indentation for 'id' and 'run'
       - name: Extract Chart Metadata
-      id: chart # The 'id' is important to reference outputs
-      run: |
-        # Find the *first* Chart.yaml in the ./helm/ directory structure.
-        # This assumes you have one main chart directory under ./helm/
-        # If you have multiple charts, this needs a different strategy (e.g., matrix, explicit input)
-        CHART_YAML_PATH=$(find ./helm -name Chart.yaml | head -n 1)
-        
-        if [ -z "$CHART_YAML_PATH" ]; then
-          echo "Error: No Chart.yaml found in ./helm/ directory."
-          exit 1
-        fi
-        
-        # Extract version
-        CHART_VERSION=$(grep '^version:' "$CHART_YAML_PATH" | cut -d ':' -f2 | xargs)
-        echo "Chart version detected: $CHART_VERSION"
-        echo "version=$CHART_VERSION" >> "$GITHUB_OUTPUT"
-        echo "$CHART_VERSION" > chart-version.txt # For artifact upload
-        
-        # Extract name
-        CHART_NAME=$(grep '^name:' "$CHART_YAML_PATH" | cut -d ':' -f2 | xargs)
-        echo "Chart name detected: $CHART_NAME"
-        echo "name=$CHART_NAME" >> "$GITHUB_OUTPUT" # Set chart name as an output
-        
-        # Extract chart directory path (e.g., ./helm/my-chart-name)
-        # dirname | xargs basename extracts "my-chart-name" from "helm/my-chart-name/Chart.yaml"
-        CHART_DIRECTORY=$(dirname "$CHART_YAML_PATH" | xargs basename)
-        echo "Chart directory name: $CHART_DIRECTORY"
-        echo "chart_directory=$CHART_DIRECTORY" >> "$GITHUB_OUTPUT" # Output the chart directory name
+        id: chart # The 'id' is important to reference outputs
+        run: |
+          # Find the *first* Chart.yaml in the ./helm/ directory structure.
+          # This assumes you have one main chart directory under ./helm/
+          # If you have multiple charts, this needs a different strategy (e.g., matrix, explicit input)
+          CHART_YAML_PATH=$(find ./helm -name Chart.yaml | head -n 1)
+          
+          if [ -z "$CHART_YAML_PATH" ]; then
+            echo "Error: No Chart.yaml found in ./helm/ directory."
+            exit 1
+          fi
+          
+          # Extract version
+          CHART_VERSION=$(grep '^version:' "$CHART_YAML_PATH" | cut -d ':' -f2 | xargs)
+          echo "Chart version detected: $CHART_VERSION"
+          echo "version=$CHART_VERSION" >> "$GITHUB_OUTPUT"
+          echo "$CHART_VERSION" > chart-version.txt # For artifact upload
+          
+          # Extract name
+          CHART_NAME=$(grep '^name:' "$CHART_YAML_PATH" | cut -d ':' -f2 | xargs)
+          echo "Chart name detected: $CHART_NAME"
+          echo "name=$CHART_NAME" >> "$GITHUB_OUTPUT" # Set chart name as an output
+          
+          # Extract chart directory path (e.g., ./helm/my-chart-name)
+          # dirname | xargs basename extracts "my-chart-name" from "helm/my-chart-name/Chart.yaml"
+          CHART_DIRECTORY=$(dirname "$CHART_YAML_PATH" | xargs basename)
+          echo "Chart directory name: $CHART_DIRECTORY"
+          echo "chart_directory=$CHART_DIRECTORY" >> "$GITHUB_OUTPUT" # Output the chart directory name
 
       # --- NEW STEP: Extract Docker Image Metadata (now using the dynamic chart name) ---
       - name: Extract Docker Image Metadata
@@ -104,16 +102,6 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-#          tags: ${{ secrets.DOCKERHUB_USERNAME }}/hello-world:latest
-
-
-      - name: Extract Chart Version
-        id: chart
-        run: |
-          VERSION=$(grep '^version:' ./helm/hello-chart/Chart.yaml | cut -d ':' -f2 | xargs)
-          echo "Chart version detected: $VERSION"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "$VERSION" > chart-version.txt # Added quotes around $VERSION for robustness
 
       # Store chart version to be used in other isolated workflow (i.e deploy)
       - name: Upload Chart Version Artifact
@@ -125,8 +113,8 @@ jobs:
       # Config Helm
       - name: Set up Helm
         uses: azure/setup-helm@v4
-        with:steps.chart.outputs.chart_directory
-          version: v3.14.0
+        with:
+          version: v3.14.0 # Corrected syntax: 'version:' should be properly indented under 'with:'
 
       # --- MODIFIED STEP: Package & Push Helm Chart to Docker Hub OCI ---
       - name: Package & Push Helm Chart to Docker Hub OCI
@@ -143,18 +131,6 @@ jobs:
 
           # Use the extracted chart name for the OCI registry path
           helm push "$CHART_PACKAGE" "oci://registry-1.docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${{ steps.chart.outputs.name }}"          
-          
-
-      # Note: awk grabs the generated .tgz filename (last word of the Helm output)
-#      - name: Package & Push Helm Chart to Docker Hub OCI (auto version)
-#        run: |
-#          echo "${{ secrets.DOCKERHUB_TOKEN }}" | helm registry login registry-1.docker.io \
-#            --username ${{ secrets.DOCKERHUB_USERNAME }} \
-#            --password-stdin
-#
-#          CHART_DIR="./helm/hello-chart"
-#          CHART_PACKAGE=$(helm package "$CHART_DIR" --destination . | awk '{print $NF}')
-#          helm push "$CHART_PACKAGE" "oci://registry-1.docker.io/${{ secrets.DOCKERHUB_USERNAME }}" # Added quotes around OCI URL for robustness
 
   deploy:
     runs-on: self-hosted
@@ -212,6 +188,7 @@ jobs:
           
           # Use sed (or envsubst if installed) to replace placeholders and create the final manifest
           # For macOS/BSD sed, you often need to provide a backup extension (e.g., '')
+          # IMPORTANT: Make sure your argocd-apps/hello-chart-app.yaml.template file uses ${DOCKERHUB_USERNAME} and ${CHART_VERSION} placeholders.
           sed -i '' "s|\${DOCKERHUB_USERNAME}|${{ secrets.DOCKERHUB_USERNAME }}|g" argocd-apps/hello-chart-app.yaml.template
           sed -i '' "s|\${CHART_VERSION}|$CHART_VERSION|g" argocd-apps/hello-chart-app.yaml.template
           
