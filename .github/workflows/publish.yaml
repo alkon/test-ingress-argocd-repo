@@ -91,7 +91,6 @@ jobs:
             type=raw,value=${{ steps.chart.outputs.version }},enable=${{ steps.chart.outputs.version != '' }}
             type=ref,event=branch
             type=ref,event=pr
-            # --- FIX IS HERE ---
             # The 'enable' condition should be directly a boolean expression
             # Use 'github.ref == 'refs/heads/main'' for exact branch matching
             # and wrap the entire expression in an interpolation block ${{ ... }}
