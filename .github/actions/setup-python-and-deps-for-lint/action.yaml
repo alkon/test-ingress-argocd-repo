@@ -20,8 +20,6 @@ runs:
 
     - name: Install Python via pyenv
       shell: bash
-      # Apply timeout-minutes directly to this step
-      timeout-minutes: ${{ inputs.install-python-timeout }} # Use the input here
       run: |
         eval "$(pyenv init --path)"
         # eval "$(pyenv virtualenv-init -)" # Keep if using pyenv virtualenvs
