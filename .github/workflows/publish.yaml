@@ -26,7 +26,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           requirements-path: app/requirements.txt
-          python-version: ${{ matrix.python-version }}
 
       - name: Run Pylint
         run: |
