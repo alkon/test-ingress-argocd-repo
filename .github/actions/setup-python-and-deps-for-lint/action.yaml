@@ -1,6 +1,6 @@
 # ./.github/actions/manual-python-setup/action.yml
-name: 'Manual Python Setup and Dependencies'
-description: 'Manually sets up a specified Python version and installs dependencies.'
+name: 'Pyenv Python Setup and Dependencies'
+description: 'Sets up Python using pyenv and installs dependencies.'
 inputs:
   python-version:
     description: 'The Python version to set up (e.g., "3.13").'
@@ -8,113 +8,66 @@ inputs:
   requirements-path:
     description: 'Path to the requirements.txt file (e.g., "app/requirements.txt").'
     required: true
-  # Removed: python-download-url input
 
 runs:
   using: "composite"
   steps:
-    - name: Determine Python Download URL
+    - name: Ensure pyenv environment is active
       shell: bash
       run: |
-        PYTHON_VERSION="${{ inputs.python-version }}"
-        PYTHON_OS="darwin-x64" # Based on your runner's OS
-        PYTHON_DOWNLOAD_URL=""
-
-        # --- IMPORTANT: You MUST update this section for any new Python versions you want to support ---
-        case "$PYTHON_VERSION" in
-          "3.13")
-            # This is the exact URL you've been using for 3.13
-            PYTHON_DOWNLOAD_URL="https://github.com/actions/python-versions/releases/download/3.13.4-15433317575/python-3.13.4-darwin-x64.tar.gz"
-            ;;
-          "3.12")
-            # Example for Python 3.12. You'll need to find the correct URL from
-            # https://github.com/actions/python-versions/releases (look for 3.12.x-yyyyy tags)
-            # This URL is an EXAMPLE and might need to be replaced with the actual one.
-            PYTHON_DOWNLOAD_URL="https://github.com/actions/python-versions/releases/download/3.12.4-1718163013/python-3.12.4-darwin-x64.tar.gz"
-            ;;
-          # Add more cases for other Python versions as needed
-          # "3.11")
-          #   PYTHON_DOWNLOAD_URL="https://example.com/path/to/python-3.11.x-darwin-x64.tar.gz"
-          #   ;;
-          *)
-            echo "Error: Unsupported Python version: $PYTHON_VERSION. Please add its download URL to the action."
-            exit 1
-            ;;
-        esac
-
-        if [ -z "$PYTHON_DOWNLOAD_URL" ]; then
-          echo "Error: Python download URL could not be determined for version $PYTHON_VERSION."
-          exit 1
-        fi
-
-        echo "PYTHON_DOWNLOAD_URL=$PYTHON_DOWNLOAD_URL" >> $GITHUB_ENV # Make URL available for next step
-
-    - name: Create Python Install Directory
-      shell: bash
-      run: |
-        PYTHON_INSTALL_DIR="${{ github.workspace }}/.python_install/${{ inputs.python-version }}"
-        mkdir -p "$PYTHON_INSTALL_DIR"
-        echo "Created Python install directory: $PYTHON_INSTALL_DIR"
-        echo "PYTHON_INSTALL_DIR=$PYTHON_INSTALL_DIR" >> $GITHUB_ENV # Make available for subsequent steps
-
-    - name: Download and Extract Python
-      shell: bash
-      run: |
-        PYTHON_INSTALL_DIR="${{ env.PYTHON_INSTALL_DIR }}"
-        PYTHON_DOWNLOAD_URL="${{ env.PYTHON_DOWNLOAD_URL }}" # Use the URL determined in the previous step
-        echo "Downloading Python from: $PYTHON_DOWNLOAD_URL"
-        curl -L "$PYTHON_DOWNLOAD_URL" -o python.tar.gz
-        echo "Extracting Python to $PYTHON_INSTALL_DIR..."
-        tar xz -C "$PYTHON_INSTALL_DIR" -f python.tar.gz
-        rm python.tar.gz # Clean up the downloaded tarball
-
-    - name: Set Python PATH and Verify
-      shell: bash
-      run: |
-        PYTHON_INSTALL_DIR="${{ env.PYTHON_INSTALL_DIR }}"
+        # These lines ensure pyenv is correctly initialized for the current shell
+        # within the GitHub Actions step.
+        # It's important to include them in each step that directly uses pyenv commands,
+        # or use GITHUB_ENV as shown below.
         
-        # --- Try finding the executable more robustly ---
-        PYTHON_EXECUTABLE_PATH=""
+        # Ensure PYENV_ROOT is correctly set. It's usually ~/.pyenv
+        echo "PYENV_ROOT=$HOME/.pyenv" >> $GITHUB_ENV
+        # Add pyenv's bin directory to PATH
+        echo "PATH=$HOME/.pyenv/bin:$PATH" >> $GITHUB_ENV
+        # Evaluate pyenv init commands to set up shims and other environment variables
+        echo "eval \"$(pyenv init --path)\"" >> $GITHUB_ENV
+        echo "eval \"$(pyenv virtualenv-init -)\"" >> $GITHUB_ENV # Needed if you use pyenv virtualenvs
+        
+        echo "Pyenv environment variables exported for subsequent steps."
 
-        # Attempt 1: Common Linux/simple structure (e.g., bin/python3.13)
-        PYTHON_EXECUTABLE_PATH=$(find "$PYTHON_INSTALL_DIR" -name "python${{ inputs.python-version }}" -type f -print -quit)
-
-        # Attempt 2: macOS framework structure (e.g., python.framework/Versions/3.13/bin/python3.13)
-        if [ -z "$PYTHON_EXECUTABLE_PATH" ]; then
-            PYTHON_EXECUTABLE_PATH=$(find "$PYTHON_INSTALL_DIR" -type f -name "python${{ inputs.python-version }}" -path "*/Versions/${{ inputs.python-version }}/*" -print -quit)
+    - name: Install Python via pyenv
+      shell: bash
+      run: |
+        # Re-evaluate pyenv init for this specific step's shell context
+        # (Needed because each 'run' step gets a fresh shell instance)
+        eval "$(pyenv init --path)"
+        eval "$(pyenv virtualenv-init -)" # Only if you plan to use pyenv virtualenvs
+        
+        PYTHON_VERSION="${{ inputs.python-version }}"
+        echo "Attempting to install Python $PYTHON_VERSION via pyenv..."
+        
+        # Check if Python version is already installed by pyenv
+        if pyenv versions --bare | grep -q "^$PYTHON_VERSION$"; then
+          echo "Python $PYTHON_VERSION is already installed via pyenv. Skipping installation."
+        else
+          # Install the specific Python version
+          # This might take a while as pyenv downloads and compiles/installs Python
+          pyenv install "$PYTHON_VERSION"
         fi
-
-        # Attempt 3: General "python3" if specific version not found (common for symlinks)
-        if [ -z "$PYTHON_EXECUTABLE_PATH" ]; then
-            PYTHON_EXECUTABLE_PATH=$(find "$PYTHON_INSTALL_DIR" -name "python3" -type f -print -quit)
-        fi
-
-        # Attempt 4: Last resort, check for python executable directly if other versions not specified by find
-        if [ -z "$PYTHON_EXECUTABLE_PATH" ]; then
-            PYTHON_EXECUTABLE_PATH=$(find "$PYTHON_INSTALL_DIR" -name "python" -type f -print -quit)
-        fi
-        # --- End of finding executable ---
-
-
-        if [ -z "$PYTHON_EXECUTABLE_PATH" ]; then
-            echo "Error: Could not find Python executable for version ${{ inputs.python-version }} after extraction."
-            echo "Please inspect the contents of '$PYTHON_INSTALL_DIR' on your runner to determine the correct path."
-            ls -R "$PYTHON_INSTALL_DIR" # List contents for debugging
-            exit 1
-        fi
-
-        PYTHON_BIN_DIR=$(dirname "$PYTHON_EXECUTABLE_PATH")
-        echo "Located Python executable at: $PYTHON_EXECUTABLE_PATH"
-        echo "Adding Python binaries to PATH: $PYTHON_BIN_DIR"
-        echo "PATH=$PYTHON_BIN_DIR:$PATH" >> $GITHUB_ENV # Add to PATH for current and future steps
-
+        
+        # Set the local Python version for this directory/job
+        # This creates a .python-version file in your GITHUB_WORKSPACE
+        pyenv local "$PYTHON_VERSION"
+        echo "pyenv local set to $PYTHON_VERSION"
+        
         # Verify Python version
         echo "Verifying Python version:"
         python --version
+        python3 --version # Often preferred on macOS/Linux
+        pip --version
 
     - name: Install Python Dependencies
       shell: bash
       run: |
+        # Re-evaluate pyenv init for this specific step's shell context
+        eval "$(pyenv init --path)"
+        eval "$(pyenv virtualenv-init -)" # Only if you plan to use pyenv virtualenvs
+        
         echo "Installing Python dependencies from ${{ inputs.requirements-path }}..."
         pip install -r ${{ inputs.requirements-path }}
         echo "Dependencies installed."
