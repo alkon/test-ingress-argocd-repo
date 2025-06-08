@@ -52,31 +52,12 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # --- COMMENTED OUT: Docker Hub Login for Python App Docker Image ---
-      # This step is now commented out as we are not pushing the Docker image to Docker Hub for this time.
-      # - name: Log in to Docker Hub for Image Push
-      #   uses: docker/login-action@v3
-      #   with:
-      #     username: ${{ secrets.DOCKERHUB_USERNAME }}
-      #     password: ${{ secrets.DOCKERHUB_TOKEN }}
-      # --- END COMMENTED OUT ---
-
-      # --- (Original) ADD GHCR Login for Helm chart publishing ---
-#      - name: Log in to GitHub Container Registry
-#        uses: docker/login-action@v3
-#        with:
-#          registry: ghcr.io
-#          username: ${{ github.actor }} # Uses the GitHub user who triggered the workflow (e.g., 'alkon')
-#          password: ${{ secrets.GITHUB_TOKEN }} # The auto-generated token with 'packages: write' permission
-      # --- END (Original) ADD ---
-
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.repository_owner }} # It's generally safer to use repository_owner or a specific username here
-          # Change this line to use your new PAT secret
-          password: ${{ secrets.GH_PAT }} # <--- THIS IS THE CHANGE
+          username: ${{ github.actor }} # GitHub user triggered the workflow (e.g., 'alkon')
+          password: ${{ secrets.GITHUB_TOKEN }} # The auto-generated token with 'packages: write' permission
 
       - name: Extract Chart Metadata
         id: chart # IMPORTANT: This ID is used to reference outputs like steps.chart.outputs.name
@@ -105,33 +86,6 @@ jobs:
           echo "Chart directory name: $CHART_DIRECTORY"
           echo "chart_directory=$CHART_DIRECTORY" >> "$GITHUB_OUTPUT" # Output for current job steps
 
-      # --- COMMENTED OUT: Docker Image Metadata Extraction ---
-      # This step is now commented out as we are not pushing the Docker image.
-      # - name: Extract Docker Image Metadata
-      #   id: meta
-      #   uses: docker/metadata-action@v5
-      #   with:
-      #     images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ steps.chart.outputs.name }}
-      #     tags: |
-      #       type=sha,format=short
-      #       type=raw,value=${{ steps.chart.outputs.version }},enable=${{ steps.chart.outputs.version != '' }}
-      #       type=ref,event=branch
-      #       type=ref,event=pr
-      #       type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/develop' }}
-      # --- END COMMENTED OUT ---
-
-      # --- COMMENTED OUT: Build and Push Docker Image to Docker Hub ---
-      # This step is now commented out as we are not pushing the Docker image.
-      # - name: Build and Push Docker Image to Docker Hub
-      #   uses: docker/build-push-action@v5
-      #   with:
-      #     context: ./app
-      #     file: ./app/Dockerfile
-      #     push: true
-      #     tags: ${{ steps.meta.outputs.tags }}
-      #     labels: ${{ steps.meta.outputs.labels }}
-      # --- END COMMENTED OUT ---
-
       - name: Upload Chart Version Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -142,9 +96,6 @@ jobs:
         uses: azure/setup-helm@v4
         with:
           version: v3.18.0
-
-      - name: Verify Helm Version in Workflow
-        run: helm version --short # THIS IS THE CRITICAL ADDITION
 
       - name: Package & Push Helm Chart to GHCR OCI
         run: |
@@ -157,7 +108,7 @@ jobs:
 
   deploy:
     runs-on: self-hosted
-    needs: build-and-publish # This is crucial to get outputs from the 'build-and-publish' job
+    needs: build-and-publish # Crucial to get outputs from the 'build-and-publish' job
 
     steps:
       - name: Checkout code
@@ -196,54 +147,69 @@ jobs:
         env:
           KUBECONFIG: ${{ env.KUBECONFIG }}
 
-      - name: Apply Argo CD Application Manifest
-        env:
-          KUBECONFIG: ${{ env.KUBECONFIG }}
+      - name: Apply Argo CD Application Manifest and Sync
         run: |
-          CHART_VERSION=$(cat chart-version.txt)
-          echo "Detected CHART_VERSION: $CHART_VERSION"
+          # Copy the template to a temporary location for processing
+          TEMP_MANIFEST_PATH="argocd-app-manifest-temp.yaml"
+          # Ensure this path is correct relative to your repo root.
+          cp "argocd-apps/hello-chart-app.yaml.template" "$TEMP_MANIFEST_PATH" 
           
+          # --- Define dynamic variables based on main workflow contexts ---
+          CHART_VERSION=$(cat chart-version.txt) # From artifact
           CHART_NAME_FROM_BUILD_JOB="${{ needs.build-and-publish.outputs.chart_name }}"
-          echo "Chart name from build job: $CHART_NAME_FROM_BUILD_JOB"
-
+          
           GHCR_HELM_OCI_FINAL_PATH="oci://ghcr.io/${{ github.repository_owner }}/${CHART_NAME_FROM_BUILD_JOB}"
-          echo "GHCR Helm OCI Source URL for Argo CD: $GHCR_HELM_OCI_FINAL_PATH"
-
-          # --- SED commands to replace all placeholders in argocd-apps/hello-chart-app.yaml.template ---
-          # 1. Replace the Helm chart's OCI repoURL placeholder
-          sed -i '' "s|\${HELM_CHART_OCI_REPO_URL}|$GHCR_HELM_OCI_FINAL_PATH|g" argocd-apps/hello-chart-app.yaml.template
-          
-          # 2. Define and replace Argo CD Application Name (e.g., hello-chart-app)
           ARGOCD_APP_NAME="${CHART_NAME_FROM_BUILD_JOB}-app"
-          sed -i '' "s|\${ARGOCD_APP_NAME}|$ARGOCD_APP_NAME|g" argocd-apps/hello-chart-app.yaml.template
-          
-          # 3. Define and replace Destination Namespace (e.g., hello-chart)
           DESTINATION_NAMESPACE="${CHART_NAME_FROM_BUILD_JOB}"
-          sed -i '' "s|\${DESTINATION_NAMESPACE}|$DESTINATION_NAMESPACE|g" argocd-apps/hello-chart-app.yaml.template
-          
-          # 4. Define and replace Helm Release Name (e.g., hello-chart-release)
           HELM_RELEASE_NAME="${CHART_NAME_FROM_BUILD_JOB}-release"
-          sed -i '' "s|\${HELM_RELEASE_NAME}|$HELM_RELEASE_NAME|g" argocd-apps/hello-chart-app.yaml.template
+          DOCKER_IMAGE_REPOSITORY="${{ secrets.DOCKERHUB_USERNAME }}/${CHART_NAME_FROM_BUILD_JOB}"
           
-          # 5. Replace chart name in source.chart (ensures it's dynamic from Chart.yaml)
-          sed -i '' "s|\${CHART_NAME}|$CHART_NAME_FROM_BUILD_JOB|g" argocd-apps/hello-chart-app.yaml.template
+          echo "Applying transformations to Argo CD Application manifest..."
+          echo "  GHCR Helm OCI Repo: $GHCR_HELM_OCI_FINAL_PATH"
+          echo "  Argo CD App Name: $ARGOCD_APP_NAME"
+          echo "  Destination Namespace: $DESTINATION_NAMESPACE"
+          echo "  Helm Release Name: $HELM_RELEASE_NAME"
+          echo "  Docker Image Repo: $DOCKER_IMAGE_REPOSITORY"
+          echo "  Chart Version: $CHART_VERSION" # Note: use shell variable directly here
+          
+          # --- SED commands to replace all placeholders in the temporary file ---
+          # Note: Using sed -i.bak for macOS compatibility with an empty backup extension
+          sed -i.bak "s|\${HELM_CHART_OCI_REPO_URL}|$GHCR_HELM_OCI_FINAL_PATH|g" "$TEMP_MANIFEST_PATH"
+          sed -i.bak "s|\${ARGOCD_APP_NAME}|$ARGOCD_APP_NAME|g" "$TEMP_MANIFEST_PATH"
+          sed -i.bak "s|\${DESTINATION_NAMESPACE}|$DESTINATION_NAMESPACE|g" "$TEMP_MANIFEST_PATH"
+          sed -i.bak "s|\${HELM_RELEASE_NAME}|$HELM_RELEASE_NAME|g" "$TEMP_MANIFEST_PATH"
+          sed -i.bak "s|\${CHART_NAME}|$CHART_NAME_FROM_BUILD_JOB|g" "$TEMP_MANIFEST_PATH"
+          sed -i.bak "s|\${DOCKER_IMAGE_REPOSITORY}|$DOCKER_IMAGE_REPOSITORY|g" "$TEMP_MANIFEST_PATH"
+          sed -i.bak "s|\${CHART_VERSION}|$CHART_VERSION|g" "$TEMP_MANIFEST_PATH"
+          
+          # Clean up backup files created by sed on macOS
+          rm -f "$TEMP_MANIFEST_PATH.bak"
+          
+          echo "--- Generated Argo CD Application Manifest Content ---"
+          cat "$TEMP_MANIFEST_PATH"
+          echo "--- END Generated Manifest ---"
+          
+          echo "Applying Argo CD Application manifest to Kubernetes..."
+          kubectl apply -f "$TEMP_MANIFEST_PATH"
+          echo "Argo CD Application manifest applied successfully."
+          
+          # --- CONDITIONAL SYNC LOGIC ---
+          # Login to Argo CD CLI first
+          argocd login localhost:8443 --username admin --password ${{ steps.get_argocd_password.outputs.argocd_password }} --insecure --grpc-web
 
-          # --- COMMENTED OUT: Define and replace Docker Image Repository ---
-          # This step is commented out as we are not pushing/referencing the Docker image from Docker Hub.
-          # You might need to adjust your Helm chart's values.yaml or its Argo CD parameters
-          # if 'image.repository' and 'image.tag' are still expected but no longer passed.
-          # DOCKER_IMAGE_REPOSITORY="${{ secrets.DOCKERHUB_USERNAME }}/${CHART_NAME_FROM_BUILD_JOB}"
-          # sed -i '' "s|\${DOCKER_IMAGE_REPOSITORY}|$DOCKER_IMAGE_REPOSITORY|g" argocd-apps/hello-chart-app.yaml.template
-          # --- END COMMENTED OUT ---
-          
-          # 6. Replace CHART_VERSION (for targetRevision and image.tag)
-          sed -i '' "s|\${CHART_VERSION}|$CHART_VERSION|g" argocd-apps/hello-chart-app.yaml.template
-          
-          mv argocd-apps/hello-chart-app.yaml.template argocd-apps/hello-chart-app.yaml
-          
-          echo "Applying Argo CD Application manifest..."
-          kubectl apply -f argocd-apps/hello-chart-app.yaml
-          echo "Argo CD Application manifest applied successfully."    
+          # Get current Argo CD application sync status
+          SYNC_STATUS=$(argocd app get "$ARGOCD_APP_NAME" -o json | jq -r '.status.sync.status')
+          echo "Current Argo CD application '$ARGOCD_APP_NAME' Sync Status: $SYNC_STATUS"
+
+          # Force sync only if the status is Unknown or OutOfSync, and without --refresh
+          if [[ "$SYNC_STATUS" == "Unknown" || "$SYNC_STATUS" == "OutOfSync" ]]; then
+              echo "Application is '$SYNC_STATUS'. Forcing Argo CD application sync (without refresh)."
+              argocd app sync "$ARGOCD_APP_NAME" --timeout 90 
+              echo "Argo CD application sync command issued."
+          else
+              echo "Application is '$SYNC_STATUS'. No sync needed at this time (it should auto-sync)."
+          fi
+              # --- END RE-INTEGRATED ---
 
       - name: Check Application Health (with Diagnostics)
         uses: ./.github/actions/app-health-check
