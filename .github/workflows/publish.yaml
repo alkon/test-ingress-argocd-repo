@@ -193,13 +193,22 @@ jobs:
           kubectl apply -f "$TEMP_MANIFEST_PATH"
           echo "Argo CD Application manifest applied successfully."
           
-          # Force Argo CD Sync
+          # --- CONDITIONAL SYNC LOGIC ---
           # Login to Argo CD CLI first
           argocd login localhost:8443 --username admin --password ${{ steps.get_argocd_password.outputs.argocd_password }} --insecure --grpc-web
-          
-          echo "Forcing Argo CD application refresh and sync for '$ARGOCD_APP_NAME'..."
-          argocd app sync "$ARGOCD_APP_NAME" --refresh --timeout 90s 
-          echo "Argo CD application sync command issued. Waiting for reconciliation..."
+
+          # Get current Argo CD application sync status
+          SYNC_STATUS=$(argocd app get "$ARGOCD_APP_NAME" -o json | jq -r '.status.sync.status')
+          echo "Current Argo CD application '$ARGOCD_APP_NAME' Sync Status: $SYNC_STATUS"
+
+          # Force sync only if the status is Unknown or OutOfSync, and without --refresh
+          if [[ "$SYNC_STATUS" == "Unknown" || "$SYNC_STATUS" == "OutOfSync" ]]; then
+              echo "Application is '$SYNC_STATUS'. Forcing Argo CD application sync (without refresh)."
+              argocd app sync "$ARGOCD_APP_NAME" --timeout 90s # Removed --refresh flag
+              echo "Argo CD application sync command issued."
+          else
+              echo "Application is '$SYNC_STATUS'. No sync needed at this time (it should auto-sync)."
+          fi
               # --- END RE-INTEGRATED ---
 
       - name: Check Application Health (with Diagnostics)
