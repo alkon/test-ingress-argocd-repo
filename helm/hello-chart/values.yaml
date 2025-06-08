@@ -3,7 +3,7 @@ image:
   tag: latest
   pullPolicy: Always #IfNotPresent
 
-replicaCount: 2
+replicaCount: 3
 
 service:
   type: ClusterIP # also works with Ingress
