@@ -7,7 +7,9 @@ on:
   workflow_dispatch: # Allows manual trigger
 
 jobs:
-  # lint: # Commented out as per your provided YAML
+  # The 'lint' and 'test' jobs are commented out as per your provided YAML.
+  # Uncomment and adjust 'needs' below if you reactivate them.
+  # lint:
   #   uses: ./.github/workflows/reusable-python-job.yaml
   #   with:
   #     job-name: Lint
@@ -20,7 +22,7 @@ jobs:
   #     matrix:
   #       python-version: [ "3.12", "3.13" ]
 
-  # test: # Commented out as per your provided YAML
+  # test:
   #   uses: ./.github/workflows/reusable-python-job.yaml
   #   with:
   #     job-name: Test
@@ -35,26 +37,43 @@ jobs:
 
   build-and-publish:
     runs-on: self-hosted
-    # needs: lint # Commented out as per your provided YAML. If you uncomment lint/test, uncomment this too.
-    # needs: [lint, test] # If you uncomment both lint and test
+    # needs: lint # Uncomment if you reactivate the lint job
+    # needs: [lint, test] # Uncomment if you reactivate both lint and test
+
+    permissions:
+      contents: read
+      packages: write # Crucial for pushing Helm charts (packages) to GHCR
+
+    outputs:
+      chart_name: ${{ steps.chart.outputs.name }}
+      chart_version: ${{ steps.chart.outputs.version }}
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Log in to Docker Hub
+      # --- COMMENTED OUT: Docker Hub Login for Python App Docker Image ---
+      # This step is now commented out as we are not pushing the Docker image to Docker Hub for this time.
+      # - name: Log in to Docker Hub for Image Push
+      #   uses: docker/login-action@v3
+      #   with:
+      #     username: ${{ secrets.DOCKERHUB_USERNAME }}
+      #     password: ${{ secrets.DOCKERHUB_TOKEN }}
+      # --- END COMMENTED OUT ---
+
+      # --- (Original) ADD GHCR Login for Helm chart publishing ---
+      - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }} # Uses the GitHub user who triggered the workflow (e.g., 'alkon')
+          password: ${{ secrets.GITHUB_TOKEN }} # The auto-generated token with 'packages: write' permission
+      # --- END (Original) ADD ---
 
-      # --- MODIFIED STEP: Extract Chart Metadata ---
       - name: Extract Chart Metadata
-        id: chart # The 'id' is important to reference outputs
+        id: chart # IMPORTANT: This ID is used to reference outputs like steps.chart.outputs.name
         run: |
           # Find the *first* Chart.yaml in the ./helm/ directory structure.
-          # This assumes you have one main chart directory under ./helm/
-          # If you have multiple charts, this needs a different strategy (e.g., matrix, explicit input)
           CHART_YAML_PATH=$(find ./helm -name Chart.yaml | head -n 1)
           
           if [ -z "$CHART_YAML_PATH" ]; then
@@ -62,79 +81,72 @@ jobs:
             exit 1
           fi
           
-          # Extract version
+          # Extract version from Chart.yaml
           CHART_VERSION=$(grep '^version:' "$CHART_YAML_PATH" | cut -d ':' -f2 | xargs)
           echo "Chart version detected: $CHART_VERSION"
-          echo "version=$CHART_VERSION" >> "$GITHUB_OUTPUT"
+          echo "version=$CHART_VERSION" >> "$GITHUB_OUTPUT" # Output for current job steps and for job output
           echo "$CHART_VERSION" > chart-version.txt # For artifact upload
           
-          # Extract name
+          # Extract name from Chart.yaml
           CHART_NAME=$(grep '^name:' "$CHART_YAML_PATH" | cut -d ':' -f2 | xargs)
           echo "Chart name detected: $CHART_NAME"
-          echo "name=$CHART_NAME" >> "$GITHUB_OUTPUT" # Set chart name as an output
+          echo "name=$CHART_NAME" >> "$GITHUB_OUTPUT" # Output for current job steps and for job output
           
-          # Extract chart directory path (e.g., ./helm/my-chart-name)
-          # dirname | xargs basename extracts "my-chart-name" from "helm/my-chart-name/Chart.yaml"
+          # Extract chart directory path (e.g., hello-chart from helm/hello-chart/Chart.yaml)
           CHART_DIRECTORY=$(dirname "$CHART_YAML_PATH" | xargs basename)
           echo "Chart directory name: $CHART_DIRECTORY"
-          echo "chart_directory=$CHART_DIRECTORY" >> "$GITHUB_OUTPUT" # Output the chart directory name
+          echo "chart_directory=$CHART_DIRECTORY" >> "$GITHUB_OUTPUT" # Output for current job steps
 
-      # --- NEW STEP: Extract Docker Image Metadata (now using the dynamic chart name) ---
-      - name: Extract Docker Image Metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ steps.chart.outputs.name }}
-          tags: |
-            type=sha,format=short
-            type=raw,value=${{ steps.chart.outputs.version }},enable=${{ steps.chart.outputs.version != '' }}
-            type=ref,event=branch
-            type=ref,event=pr
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' }}  
+      # --- COMMENTED OUT: Docker Image Metadata Extraction ---
+      # This step is now commented out as we are not pushing the Docker image.
+      # - name: Extract Docker Image Metadata
+      #   id: meta
+      #   uses: docker/metadata-action@v5
+      #   with:
+      #     images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ steps.chart.outputs.name }}
+      #     tags: |
+      #       type=sha,format=short
+      #       type=raw,value=${{ steps.chart.outputs.version }},enable=${{ steps.chart.outputs.version != '' }}
+      #       type=ref,event=branch
+      #       type=ref,event=pr
+      #       type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/develop' }}
+      # --- END COMMENTED OUT ---
 
-      - name: Build and Push Docker Image to Docker Hub
-        uses: docker/build-push-action@v5
-        with:
-          context: ./app
-          file: ./app/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+      # --- COMMENTED OUT: Build and Push Docker Image to Docker Hub ---
+      # This step is now commented out as we are not pushing the Docker image.
+      # - name: Build and Push Docker Image to Docker Hub
+      #   uses: docker/build-push-action@v5
+      #   with:
+      #     context: ./app
+      #     file: ./app/Dockerfile
+      #     push: true
+      #     tags: ${{ steps.meta.outputs.tags }}
+      #     labels: ${{ steps.meta.outputs.labels }}
+      # --- END COMMENTED OUT ---
 
-      # Store chart version to be used in other isolated workflow (i.e deploy)
       - name: Upload Chart Version Artifact
         uses: actions/upload-artifact@v4
         with:
           name: chart-version
           path: chart-version.txt
 
-      # Config Helm
       - name: Set up Helm
         uses: azure/setup-helm@v4
         with:
-          version: v3.14.0 # This line (or the 'with:' above it) is likely line 85. It must be correctly indented.
+          version: v3.18.0
 
-      # --- MODIFIED STEP: Package & Push Helm Chart to Docker Hub OCI ---
-      - name: Package & Push Helm Chart to Docker Hub OCI
+      - name: Package & Push Helm Chart to GHCR OCI
         run: |
-          echo "${{ secrets.DOCKERHUB_TOKEN }}" | helm registry login registry-1.docker.io \
-            --username ${{ secrets.DOCKERHUB_USERNAME }} \
-            --password-stdin
-
-          # Use the extracted chart directory name for packaging
           CHART_DIR="./helm/${{ steps.chart.outputs.chart_directory }}" 
-          
           CHART_PACKAGE=$(helm package "$CHART_DIR" --destination . | awk '{print $NF}')
           echo "Packaged chart: $CHART_PACKAGE"
-          
-          echo "Expected Docker Hub OCI Repository: registry-1.docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${{ steps.chart.outputs.name }}"
-
-          # Use the extracted chart name for the OCI registry path
-          helm push "$CHART_PACKAGE" "oci://registry-1.docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${{ steps.chart.outputs.name }}"          
+          GHCR_OCI_TARGET="oci://ghcr.io/${{ github.repository_owner }}/${{ steps.chart.outputs.name }}"
+          echo "Pushing Helm chart to GHCR OCI Repository: $GHCR_OCI_TARGET"
+          helm push "$CHART_PACKAGE" "$GHCR_OCI_TARGET" --debug
 
   deploy:
     runs-on: self-hosted
-    needs: build-and-publish
+    needs: build-and-publish # This is crucial to get outputs from the 'build-and-publish' job
 
     steps:
       - name: Checkout code
@@ -149,10 +161,8 @@ jobs:
       - name: Set up Kubeconfig for K3D Cluster
         run: |
           mkdir -p ~/.kube
-          # Directly write the pre-configured Kubeconfig content from your GitHub Secret
           echo "${{ secrets.KUBECONFIG }}" > ~/.kube/config
           chmod 600 ~/.kube/config
-          # Set KUBECONFIG env var for all subsequent steps in this job.
           echo "KUBECONFIG=$HOME/.kube/config" >> $GITHUB_ENV
 
       - name: Get Argo CD Admin Password
@@ -163,9 +173,8 @@ jobs:
           echo "Argo CD admin password retrieved successfully."
         timeout-minutes: 1
 
-
       - name: Start ArgoCD Service Port Forward
-        uses: ./.github/actions/kubectl-port-forward # Path to your custom action
+        uses: ./.github/actions/kubectl-port-forward
         with:
           service: argocd-server
           namespace: argocd
@@ -174,42 +183,65 @@ jobs:
           wait-for-ready: true
           timeout: 60
         env:
-          KUBECONFIG: ${{ env.KUBECONFIG }} # Ensure KUBECONFIG is passed to your action
+          KUBECONFIG: ${{ env.KUBECONFIG }}
 
-      # --- Apply Application Manifest with kubectl ---
       - name: Apply Argo CD Application Manifest
-        # Corrected indentation for 'env:' and 'run:'
         env:
           KUBECONFIG: ${{ env.KUBECONFIG }}
         run: |
-          # Read CHART_VERSION from the artifact
           CHART_VERSION=$(cat chart-version.txt)
           echo "Detected CHART_VERSION: $CHART_VERSION"
           
-          # Use sed (or envsubst if installed) to replace placeholders and create the final manifest
-          # For macOS/BSD sed, you often need to provide a backup extension (e.g., '')
-          # IMPORTANT: Make sure your argocd-apps/hello-chart-app.yaml.template file uses ${DOCKERHUB_USERNAME} and ${CHART_VERSION} placeholders.
-          sed -i '' "s|\${DOCKERHUB_USERNAME}|${{ secrets.DOCKERHUB_USERNAME }}|g" argocd-apps/hello-chart-app.yaml.template
+          CHART_NAME_FROM_BUILD_JOB="${{ needs.build-and-publish.outputs.chart_name }}"
+          echo "Chart name from build job: $CHART_NAME_FROM_BUILD_JOB"
+
+          GHCR_HELM_OCI_FINAL_PATH="oci://ghcr.io/${{ github.repository_owner }}/${CHART_NAME_FROM_BUILD_JOB}"
+          echo "GHCR Helm OCI Source URL for Argo CD: $GHCR_HELM_OCI_FINAL_PATH"
+
+          # --- SED commands to replace all placeholders in argocd-apps/hello-chart-app.yaml.template ---
+          # 1. Replace the Helm chart's OCI repoURL placeholder
+          sed -i '' "s|\${HELM_CHART_OCI_REPO_URL}|$GHCR_HELM_OCI_FINAL_PATH|g" argocd-apps/hello-chart-app.yaml.template
+          
+          # 2. Define and replace Argo CD Application Name (e.g., hello-chart-app)
+          ARGOCD_APP_NAME="${CHART_NAME_FROM_BUILD_JOB}-app"
+          sed -i '' "s|\${ARGOCD_APP_NAME}|$ARGOCD_APP_NAME|g" argocd-apps/hello-chart-app.yaml.template
+          
+          # 3. Define and replace Destination Namespace (e.g., hello-chart)
+          DESTINATION_NAMESPACE="${CHART_NAME_FROM_BUILD_JOB}"
+          sed -i '' "s|\${DESTINATION_NAMESPACE}|$DESTINATION_NAMESPACE|g" argocd-apps/hello-chart-app.yaml.template
+          
+          # 4. Define and replace Helm Release Name (e.g., hello-chart-release)
+          HELM_RELEASE_NAME="${CHART_NAME_FROM_BUILD_JOB}-release"
+          sed -i '' "s|\${HELM_RELEASE_NAME}|$HELM_RELEASE_NAME|g" argocd-apps/hello-chart-app.yaml.template
+          
+          # 5. Replace chart name in source.chart (ensures it's dynamic from Chart.yaml)
+          sed -i '' "s|\${CHART_NAME}|$CHART_NAME_FROM_BUILD_JOB|g" argocd-apps/hello-chart-app.yaml.template
+
+          # --- COMMENTED OUT: Define and replace Docker Image Repository ---
+          # This step is commented out as we are not pushing/referencing the Docker image from Docker Hub.
+          # You might need to adjust your Helm chart's values.yaml or its Argo CD parameters
+          # if 'image.repository' and 'image.tag' are still expected but no longer passed.
+          # DOCKER_IMAGE_REPOSITORY="${{ secrets.DOCKERHUB_USERNAME }}/${CHART_NAME_FROM_BUILD_JOB}"
+          # sed -i '' "s|\${DOCKER_IMAGE_REPOSITORY}|$DOCKER_IMAGE_REPOSITORY|g" argocd-apps/hello-chart-app.yaml.template
+          # --- END COMMENTED OUT ---
+          
+          # 6. Replace CHART_VERSION (for targetRevision and image.tag)
           sed -i '' "s|\${CHART_VERSION}|$CHART_VERSION|g" argocd-apps/hello-chart-app.yaml.template
           
-          # Rename the templated file to its final name
           mv argocd-apps/hello-chart-app.yaml.template argocd-apps/hello-chart-app.yaml
           
-          # Apply the Argo CD Application manifest directly to Kubernetes
           echo "Applying Argo CD Application manifest..."
           kubectl apply -f argocd-apps/hello-chart-app.yaml
           echo "Argo CD Application manifest applied successfully."    
 
       - name: Check Application Health (with Diagnostics)
-        uses: ./.github/actions/app-health-check # Path to your new custom action
+        uses: ./.github/actions/app-health-check
         with:
-          app-name: hello-chart-app # The name of your Argo CD application
-          app-namespace: hello-chart # The Kubernetes namespace where your app's resources are deployed
-          wait-timeout: 90 # Timeout in seconds for the health check (adjust as needed)
-          argocd-server-address: localhost:8443 # The address where Argo CD is accessible via port-forward
-          argocd-username: admin # Your Argo CD admin username
-          argocd-password: ${{ steps.get_argocd_password.outputs.argocd_password }} # The password retrieved from the previous step
+          app-name: "${{ needs.build-and-publish.outputs.chart_name }}-app"
+          app-namespace: "${{ needs.build-and-publish.outputs.chart_name }}"
+          wait-timeout: 90
+          argocd-server-address: localhost:8443
+          argocd-username: admin
+          argocd-password: ${{ steps.get_argocd_password.outputs.argocd_password }}
         env:
           KUBECONFIG: ${{ env.KUBECONFIG }}
-
-      # --- No separate cleanup step needed due to the custom action's 'post' hook ---
