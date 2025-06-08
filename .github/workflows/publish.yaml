@@ -143,6 +143,9 @@ jobs:
         with:
           version: v3.18.0
 
+      - name: Verify Helm Version in Workflow
+        run: helm version --short # THIS IS THE CRITICAL ADDITION
+
       - name: Package & Push Helm Chart to GHCR OCI
         run: |
           CHART_DIR="./helm/${{ steps.chart.outputs.chart_directory }}" 
