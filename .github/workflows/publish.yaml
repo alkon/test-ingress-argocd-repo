@@ -204,7 +204,7 @@ jobs:
           # Force sync only if the status is Unknown or OutOfSync, and without --refresh
           if [[ "$SYNC_STATUS" == "Unknown" || "$SYNC_STATUS" == "OutOfSync" ]]; then
               echo "Application is '$SYNC_STATUS'. Forcing Argo CD application sync (without refresh)."
-              argocd app sync "$ARGOCD_APP_NAME" --timeout 90s # Removed --refresh flag
+              argocd app sync "$ARGOCD_APP_NAME" --timeout 90 
               echo "Argo CD application sync command issued."
           else
               echo "Application is '$SYNC_STATUS'. No sync needed at this time (it should auto-sync)."

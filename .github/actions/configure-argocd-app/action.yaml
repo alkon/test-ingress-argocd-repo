@@ -1,0 +1,150 @@
+# .github/actions/configure-argocd-app/action.yml
+name: 'Configure and Sync Argo CD Application'
+description: 'Applies Argo CD Application manifest and forces a sync with refresh.'
+
+inputs:
+  # Kubernetes Kubeconfig to connect to the cluster where Argo CD runs
+  kubeconfig:
+    description: 'Base64 encoded Kubeconfig for Kubernetes cluster access.'
+    required: true
+
+  # Argo CD admin password for CLI login
+  argocd-admin-password:
+    description: 'Argo CD admin password.'
+    required: true
+
+  # Name of the Helm chart (e.g., 'hello-chart')
+  chart-name:
+    description: 'Name of the Helm chart as defined in Chart.yaml.'
+    required: true
+
+  # Version of the Helm chart (e.g., 'v0.14.0')
+  chart-version:
+    description: 'Version of the Helm chart.'
+    required: true
+
+  # GitHub repository owner (your username or organization name, e.g., 'alkon')
+  github-repo-owner:
+    description: 'GitHub repository owner (user or organization name).'
+    required: true
+
+  # Docker Hub username (e.g., 'alkon100') - for the Docker image within Helm values
+  dockerhub-username:
+    description: 'Docker Hub username for Docker image repository.'
+    required: true
+
+  # Path to the Argo CD Application template file relative to the repository root
+  argocd-app-template-path:
+    description: 'Path to the Argo CD Application YAML template file.'
+    required: true
+
+runs:
+  using: "composite" # Use composite action to run multiple shell commands
+
+  steps:
+    - name: Set up Kubeconfig
+      shell: bash
+      run: |
+        # Create .kube directory if it doesn't exist
+        mkdir -p ~/.kube
+        # Write the Kubeconfig content from the input secret to a file
+        echo "${{ inputs.kubeconfig }}" > ~/.kube/config
+        # Set appropriate permissions for the Kubeconfig file
+        chmod 600 ~/.kube/config
+        # Set KUBECONFIG environment variable for all subsequent steps in this composite action
+        echo "KUBECONFIG=$HOME/.kube/config" >> $GITHUB_ENV
+      env:
+        HOME: /github/home # Ensure HOME is set for consistent path on runner
+
+    # Install Argo CD CLI (if not already pre-installed on the runner)
+    # For self-hosted runners, it's often pre-installed. Including this ensures portability.
+    - name: Install Argo CD CLI
+      shell: bash
+      run: |
+        if ! command -v argocd &> /dev/null; then
+          echo "Argo CD CLI not found. Installing..."
+          # Download the latest stable Argo CD CLI (adjust version as needed)
+          ARGO_VERSION=$(curl --silent "https://api.github.com/repos/argoproj/argo-cd/releases/latest" | grep -Po '"tag_name": "\K[^"]*')
+          curl -sSL -o /usr/local/bin/argocd https://github.com/argoproj/argo-cd/releases/download/$ARGO_VERSION/argocd-linux-amd64 # Adjust for macOS if needed
+          chmod +x /usr/local/bin/argocd
+          echo "Argo CD CLI version: $(argocd version --client)"
+        else
+          echo "Argo CD CLI already installed: $(argocd version --client)"
+        fi
+
+    - name: Start ArgoCD Service Port Forward
+      # This step assumes a separate 'kubectl-port-forward' action is used,
+      # or you can embed similar logic here. Given you have an action, we'll keep it.
+      # However, for a fully self-contained action, it would need to manage the background process.
+      # For simplicity here, we assume the port-forward is handled externally or within this action if adapted.
+      # If your kubectl-port-forward is another action, you can't "use" it directly here in composite.
+      # Instead, you'd need to put this logic in the main workflow *before* calling this custom action.
+      # For THIS custom action to be fully self-contained, we'd need to run `kubectl port-forward`
+      # in a background process and potentially kill it later.
+      # For now, I'll put a placeholder for the logic that would exist if integrated fully.
+      shell: bash
+      run: |
+        echo "Note: This composite action does not manage `kubectl port-forward` directly."
+        echo "Please ensure the Argo CD server is accessible (e.g., via a preceding `kubectl port-forward` step)."
+        # If you were to fully embed it and run in background, it would look something like:
+        # kubectl port-forward -n argocd svc/argocd-server 8443:443 --address 0.0.0.0 &
+        # echo $! > /tmp/argocd_pf_pid # Store PID to kill later
+        # sleep 10 # Give time to establish forward
+        # echo "Port-forward command issued."
+
+    - name: Apply Argo CD Application Manifest
+      shell: bash
+      run: |
+        # Copy the template to a temporary location for processing
+        TEMP_MANIFEST_PATH="argocd-app-manifest-temp.yaml"
+        cp "${{ inputs.argocd-app-template-path }}" "$TEMP_MANIFEST_PATH"
+
+        # --- Define dynamic variables based on inputs ---
+        GHCR_HELM_OCI_FINAL_PATH="oci://ghcr.io/${{ inputs.github-repo-owner }}/${{ inputs.chart-name }}"
+        ARGOCD_APP_NAME="${{ inputs.chart-name }}-app"
+        DESTINATION_NAMESPACE="${{ inputs.chart-name }}"
+        HELM_RELEASE_NAME="${{ inputs.chart-name }}-release"
+        DOCKER_IMAGE_REPOSITORY="${{ inputs.dockerhub-username }}/${{ inputs.chart-name }}"
+
+        echo "Applying transformations to Argo CD Application manifest..."
+        echo "  GHCR Helm OCI Repo: $GHCR_HELM_OCI_FINAL_PATH"
+        echo "  Argo CD App Name: $ARGOCD_APP_NAME"
+        echo "  Destination Namespace: $DESTINATION_NAMESPACE"
+        echo "  Helm Release Name: $HELM_RELEASE_NAME"
+        echo "  Docker Image Repo: $DOCKER_IMAGE_REPOSITORY"
+        echo "  Chart Version: ${{ inputs.chart-version }}"
+
+        # --- SED commands to replace all placeholders in the temporary file ---
+        # Note: Using sed -i.bak for macOS compatibility with an empty backup extension
+        sed -i.bak "s|\${HELM_CHART_OCI_REPO_URL}|$GHCR_HELM_OCI_FINAL_PATH|g" "$TEMP_MANIFEST_PATH"
+        sed -i.bak "s|\${ARGOCD_APP_NAME}|$ARGOCD_APP_NAME|g" "$TEMP_MANIFEST_PATH"
+        sed -i.bak "s|\${DESTINATION_NAMESPACE}|$DESTINATION_NAMESPACE|g" "$TEMP_MANIFEST_PATH"
+        sed -i.bak "s|\${HELM_RELEASE_NAME}|$HELM_RELEASE_NAME|g" "$TEMP_MANIFEST_PATH"
+        sed -i.bak "s|\${CHART_NAME}|${{ inputs.chart-name }}|g" "$TEMP_MANIFEST_PATH"
+        sed -i.bak "s|\${DOCKER_IMAGE_REPOSITORY}|$DOCKER_IMAGE_REPOSITORY|g" "$TEMP_MANIFEST_PATH"
+        sed -i.bak "s|\${CHART_VERSION}|${{ inputs.chart-version }}|g" "$TEMP_MANIFEST_PATH"
+
+        # Clean up backup files created by sed on macOS
+        rm -f "$TEMP_MANIFEST_PATH.bak"
+
+        echo "--- Generated Argo CD Application Manifest Content ---"
+        cat "$TEMP_MANIFEST_PATH"
+        echo "--- END Generated Manifest ---"
+
+        echo "Applying Argo CD Application manifest to Kubernetes..."
+        kubectl apply -f "$TEMP_MANIFEST_PATH"
+        echo "Argo CD Application manifest applied successfully."
+        
+        # --- Force Argo CD Sync ---
+        # Login to Argo CD CLI
+        argocd login localhost:8443 --username admin --password ${{ inputs.argocd-admin-password }} --insecure --grpc-web
+
+        echo "Forcing Argo CD application refresh and sync for '$ARGOCD_APP_NAME'..."
+        # The --refresh flag tells Argo CD to re-poll the source repository
+        # --timeout ensures it doesn't hang indefinitely
+        argocd app sync "$ARGOCD_APP_NAME" --refresh --timeout 90s 
+        echo "Argo CD application sync command issued. Waiting for reconciliation..."
+
+    # Kill port-forward if it was started in background within this action
+    # This would typically be in a 'post:' section if this was a Docker action,
+    # or another step in the main workflow if port-forward is launched there.
