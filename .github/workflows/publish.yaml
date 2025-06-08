@@ -189,6 +189,16 @@ jobs:
           sed -i.bak "s|\${DOCKER_IMAGE_REPOSITORY}|$DOCKER_IMAGE_REPOSITORY|g" "$TEMP_MANIFEST_PATH"
           sed -i.bak "s|\${CHART_VERSION}|$CHART_VERSION|g" "$TEMP_MANIFEST_PATH"
           
+          # --- FIX IS HERE ---
+          # Original: sed -i.bak "s|\${DOCKER_IMAGE_REPOSITORY}|$DOCKER_IMAGE_REPOSITORY|g" "$TEMP_MANIFEST_PATH"
+          # The template has: value: "image.repository.placeholder"
+          # So, we need to match "image.repository.placeholder" directly
+          sed -i.bak "s|image.repository.placeholder|$DOCKER_IMAGE_REPOSITORY|g" "$TEMP_MANIFEST_PATH" # FIX
+          # --- END FIX ---
+    
+          sed -i.bak "s|\${CHART_VERSION}|$CHART_VERSION|g" "$TEMP_MANIFEST_PATH"
+          
+          
           # Clean up backup files created by sed on macOS
           rm -f "$TEMP_MANIFEST_PATH.bak"
           
