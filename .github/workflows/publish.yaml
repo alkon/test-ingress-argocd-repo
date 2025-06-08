@@ -134,7 +134,7 @@ jobs:
           chmod 600 ~/.kube/config
           echo "KUBECONFIG=$HOME/.kube/config" >> $GITHUB_ENV
 
-      - name: Get Argo CD Admin Password
+      - name: Get Argo CD Admin Password and Sync
         id: get_argocd_password
         run: |
           ARGOCD_ADMIN_PASSWORD=$(kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.password}' | base64 -d)
@@ -154,60 +154,53 @@ jobs:
         env:
           KUBECONFIG: ${{ env.KUBECONFIG }}
 
-      - name: Apply Argo CD Application Manifest and Sync
+      - name: Apply Argo CD Application Manifest
+        env:
+          KUBECONFIG: ${{ env.KUBECONFIG }}
         run: |
-          # Copy the template to a temporary location for processing
-          TEMP_MANIFEST_PATH="argocd-app-manifest-temp.yaml"
-          # Ensure this path is correct relative to your repo root.
-          cp "argocd-apps/hello-chart-app.yaml.template" "$TEMP_MANIFEST_PATH" 
-          
-          # --- Define dynamic variables based on main workflow contexts ---
-          CHART_VERSION=$(cat chart-version.txt) # From artifact
+          CHART_VERSION=$(cat chart-version.txt)
+          echo "Detected CHART_VERSION: $CHART_VERSION"
+
           CHART_NAME_FROM_BUILD_JOB="${{ needs.build-and-publish.outputs.chart_name }}"
-          
+          echo "Chart name from build job: $CHART_NAME_FROM_BUILD_JOB"
+
           GHCR_HELM_OCI_FINAL_PATH="oci://ghcr.io/${{ github.repository_owner }}/${CHART_NAME_FROM_BUILD_JOB}"
+          echo "GHCR Helm OCI Source URL for Argo CD: $GHCR_HELM_OCI_FINAL_PATH"
+
+          # --- SED commands to replace all placeholders in argocd-apps/hello-chart-app.yaml.template ---
+          # 1. Replace the Helm chart's OCI repoURL placeholder
+          sed -i '' "s|\${HELM_CHART_OCI_REPO_URL}|$GHCR_HELM_OCI_FINAL_PATH|g" argocd-apps/hello-chart-app.yaml.template
+
+          # 2. Define and replace Argo CD Application Name (e.g., hello-chart-app)
           ARGOCD_APP_NAME="${CHART_NAME_FROM_BUILD_JOB}-app"
+          sed -i '' "s|\${ARGOCD_APP_NAME}|$ARGOCD_APP_NAME|g" argocd-apps/hello-chart-app.yaml.template
+
+          # 3. Define and replace Destination Namespace (e.g., hello-chart)
           DESTINATION_NAMESPACE="${CHART_NAME_FROM_BUILD_JOB}"
+          sed -i '' "s|\${DESTINATION_NAMESPACE}|$DESTINATION_NAMESPACE|g" argocd-apps/hello-chart-app.yaml.template
+
+          # 4. Define and replace Helm Release Name (e.g., hello-chart-release)
           HELM_RELEASE_NAME="${CHART_NAME_FROM_BUILD_JOB}-release"
-          DOCKER_IMAGE_REPOSITORY="${{ secrets.DOCKERHUB_USERNAME }}/${CHART_NAME_FROM_BUILD_JOB}"
-          
-          echo "Applying transformations to Argo CD Application manifest..."
-          echo "  GHCR Helm OCI Repo: $GHCR_HELM_OCI_FINAL_PATH"
-          echo "  Argo CD App Name: $ARGOCD_APP_NAME"
-          echo "  Destination Namespace: $DESTINATION_NAMESPACE"
-          echo "  Helm Release Name: $HELM_RELEASE_NAME"
-          echo "  Docker Image Repo: $DOCKER_IMAGE_REPOSITORY"
-          echo "  Chart Version: $CHART_VERSION" # Note: use shell variable directly here
-          
-          # --- SED commands to replace all placeholders in the temporary file ---
-          # Note: Using sed -i.bak for macOS compatibility with an empty backup extension
-          sed -i.bak "s|\${HELM_CHART_OCI_REPO_URL}|$GHCR_HELM_OCI_FINAL_PATH|g" "$TEMP_MANIFEST_PATH"
-          sed -i.bak "s|\${ARGOCD_APP_NAME}|$ARGOCD_APP_NAME|g" "$TEMP_MANIFEST_PATH"
-          sed -i.bak "s|\${DESTINATION_NAMESPACE}|$DESTINATION_NAMESPACE|g" "$TEMP_MANIFEST_PATH"
-          sed -i.bak "s|\${HELM_RELEASE_NAME}|$HELM_RELEASE_NAME|g" "$TEMP_MANIFEST_PATH"
-          sed -i.bak "s|\${CHART_NAME}|$CHART_NAME_FROM_BUILD_JOB|g" "$TEMP_MANIFEST_PATH"
-          sed -i.bak "s|\${DOCKER_IMAGE_REPOSITORY}|$DOCKER_IMAGE_REPOSITORY|g" "$TEMP_MANIFEST_PATH"
-          sed -i.bak "s|\${CHART_VERSION}|$CHART_VERSION|g" "$TEMP_MANIFEST_PATH"
-          
-          # --- FIX IS HERE ---
-          # Original: sed -i.bak "s|\${DOCKER_IMAGE_REPOSITORY}|$DOCKER_IMAGE_REPOSITORY|g" "$TEMP_MANIFEST_PATH"
-          # The template has: value: "image.repository.placeholder"
-          # So, we need to match "image.repository.placeholder" directly
-          sed -i.bak "s|image.repository.placeholder|$DOCKER_IMAGE_REPOSITORY|g" "$TEMP_MANIFEST_PATH" # FIX
-          # --- END FIX ---
-    
-          sed -i.bak "s|\${CHART_VERSION}|$CHART_VERSION|g" "$TEMP_MANIFEST_PATH"
-          
-          
-          # Clean up backup files created by sed on macOS
-          rm -f "$TEMP_MANIFEST_PATH.bak"
-          
-          echo "--- Generated Argo CD Application Manifest Content ---"
-          cat "$TEMP_MANIFEST_PATH"
-          echo "--- END Generated Manifest ---"
-          
-          echo "Applying Argo CD Application manifest to Kubernetes..."
-          kubectl apply -f "$TEMP_MANIFEST_PATH"
+          sed -i '' "s|\${HELM_RELEASE_NAME}|$HELM_RELEASE_NAME|g" argocd-apps/hello-chart-app.yaml.template
+
+          # 5. Replace chart name in source.chart (ensures it's dynamic from Chart.yaml)
+          sed -i '' "s|\${CHART_NAME}|$CHART_NAME_FROM_BUILD_JOB|g" argocd-apps/hello-chart-app.yaml.template
+
+          # --- COMMENTED OUT: Define and replace Docker Image Repository ---
+          # This step is commented out as we are not pushing/referencing the Docker image from Docker Hub.
+          # You might need to adjust your Helm chart's values.yaml or its Argo CD parameters
+          # if 'image.repository' and 'image.tag' are still expected but no longer passed.
+          # DOCKER_IMAGE_REPOSITORY="${{ secrets.DOCKERHUB_USERNAME }}/${CHART_NAME_FROM_BUILD_JOB}"
+          # sed -i '' "s|\${DOCKER_IMAGE_REPOSITORY}|$DOCKER_IMAGE_REPOSITORY|g" argocd-apps/hello-chart-app.yaml.template
+          # --- END COMMENTED OUT ---
+
+          # 6. Replace CHART_VERSION (for targetRevision and image.tag)
+          sed -i '' "s|\${CHART_VERSION}|$CHART_VERSION|g" argocd-apps/hello-chart-app.yaml.template
+
+          mv argocd-apps/hello-chart-app.yaml.template argocd-apps/hello-chart-app.yaml
+
+          echo "Applying Argo CD Application manifest..."
+          kubectl apply -f argocd-apps/hello-chart-app.yaml
           echo "Argo CD Application manifest applied successfully."
           
           # --- CONDITIONAL SYNC LOGIC ---
@@ -226,7 +219,7 @@ jobs:
           else
               echo "Application is '$SYNC_STATUS'. No sync needed at this time (it should auto-sync)."
           fi
-              # --- END RE-INTEGRATED ---
+          # --- END RE-INTEGRATED ---
 
       - name: Check Application Health (with Diagnostics)
         uses: ./.github/actions/app-health-check
