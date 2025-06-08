@@ -2,19 +2,24 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: hello-chart-app
+  name: ${ARGOCD_APP_NAME}
   namespace: argocd
 spec:
   project: default
   source:
-    repoURL: registry-1.docker.io/${DOCKERHUB_USERNAME}
-    chart: hello-chart
+    repoURL: ${HELM_CHART_OCI_REPO_URL} # THIS LINE IS CRUCIAL
+    chart: ${CHART_NAME}
     targetRevision: ${CHART_VERSION}
     helm:
-      releaseName: hello-chart-release
+      releaseName: ${HELM_RELEASE_NAME}
+      parameters:
+        - name: "image.repository"
+          value: "image.repository.placeholder" # This will be commented out in workflow, ensure no old DOCKERHUB_USERNAME here
+        - name: "image.tag"
+          value: "${CHART_VERSION}"
   destination:
     server: https://kubernetes.default.svc
-    namespace: hello-chart
+    namespace: ${DESTINATION_NAMESPACE}
   syncPolicy:
     automated:
       prune: true
