@@ -62,13 +62,21 @@ jobs:
       # --- END COMMENTED OUT ---
 
       # --- (Original) ADD GHCR Login for Helm chart publishing ---
+#      - name: Log in to GitHub Container Registry
+#        uses: docker/login-action@v3
+#        with:
+#          registry: ghcr.io
+#          username: ${{ github.actor }} # Uses the GitHub user who triggered the workflow (e.g., 'alkon')
+#          password: ${{ secrets.GITHUB_TOKEN }} # The auto-generated token with 'packages: write' permission
+      # --- END (Original) ADD ---
+
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.actor }} # Uses the GitHub user who triggered the workflow (e.g., 'alkon')
-          password: ${{ secrets.GITHUB_TOKEN }} # The auto-generated token with 'packages: write' permission
-      # --- END (Original) ADD ---
+          username: ${{ github.repository_owner }} # It's generally safer to use repository_owner or a specific username here
+          # Change this line to use your new PAT secret
+          password: ${{ secrets.GH_PAT }} # <--- THIS IS THE CHANGE
 
       - name: Extract Chart Metadata
         id: chart # IMPORTANT: This ID is used to reference outputs like steps.chart.outputs.name
