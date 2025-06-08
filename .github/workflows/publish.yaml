@@ -147,19 +147,22 @@ jobs:
         env:
           KUBECONFIG: ${{ env.KUBECONFIG }}
 
-      - name: Apply Argo CD Application Manifest
-        shell: bash
+      - name: Apply Argo CD Application Manifest and Sync
         run: |
           # Copy the template to a temporary location for processing
           TEMP_MANIFEST_PATH="argocd-app-manifest-temp.yaml"
-          cp "${{ inputs.argocd-app-template-path }}" "$TEMP_MANIFEST_PATH"
+          # Ensure this path is correct relative to your repo root.
+          cp "argocd-apps/hello-chart-app.yaml.template" "$TEMP_MANIFEST_PATH" 
           
-          # --- Define dynamic variables based on inputs ---
-          GHCR_HELM_OCI_FINAL_PATH="oci://ghcr.io/${{ inputs.github-repo-owner }}/${{ inputs.chart-name }}"
-          ARGOCD_APP_NAME="${{ inputs.chart-name }}-app"
-          DESTINATION_NAMESPACE="${{ inputs.chart-name }}"
-          HELM_RELEASE_NAME="${{ inputs.chart-name }}-release"
-          DOCKER_IMAGE_REPOSITORY="${{ inputs.dockerhub-username }}/${{ inputs.chart-name }}"
+          # --- Define dynamic variables based on main workflow contexts ---
+          CHART_VERSION=$(cat chart-version.txt) # From artifact
+          CHART_NAME_FROM_BUILD_JOB="${{ needs.build-and-publish.outputs.chart_name }}"
+          
+          GHCR_HELM_OCI_FINAL_PATH="oci://ghcr.io/${{ github.repository_owner }}/${CHART_NAME_FROM_BUILD_JOB}"
+          ARGOCD_APP_NAME="${CHART_NAME_FROM_BUILD_JOB}-app"
+          DESTINATION_NAMESPACE="${CHART_NAME_FROM_BUILD_JOB}"
+          HELM_RELEASE_NAME="${CHART_NAME_FROM_BUILD_JOB}-release"
+          DOCKER_IMAGE_REPOSITORY="${{ secrets.DOCKERHUB_USERNAME }}/${CHART_NAME_FROM_BUILD_JOB}"
           
           echo "Applying transformations to Argo CD Application manifest..."
           echo "  GHCR Helm OCI Repo: $GHCR_HELM_OCI_FINAL_PATH"
@@ -167,16 +170,17 @@ jobs:
           echo "  Destination Namespace: $DESTINATION_NAMESPACE"
           echo "  Helm Release Name: $HELM_RELEASE_NAME"
           echo "  Docker Image Repo: $DOCKER_IMAGE_REPOSITORY"
-          echo "  Chart Version: ${{ inputs.chart-version }}"
+          echo "  Chart Version: $CHART_VERSION" # Note: use shell variable directly here
           
           # --- SED commands to replace all placeholders in the temporary file ---
+          # Note: Using sed -i.bak for macOS compatibility with an empty backup extension
           sed -i.bak "s|\${HELM_CHART_OCI_REPO_URL}|$GHCR_HELM_OCI_FINAL_PATH|g" "$TEMP_MANIFEST_PATH"
           sed -i.bak "s|\${ARGOCD_APP_NAME}|$ARGOCD_APP_NAME|g" "$TEMP_MANIFEST_PATH"
           sed -i.bak "s|\${DESTINATION_NAMESPACE}|$DESTINATION_NAMESPACE|g" "$TEMP_MANIFEST_PATH"
           sed -i.bak "s|\${HELM_RELEASE_NAME}|$HELM_RELEASE_NAME|g" "$TEMP_MANIFEST_PATH"
-          sed -i.bak "s|\${CHART_NAME}|${{ inputs.chart-name }}|g" "$TEMP_MANIFEST_PATH"
+          sed -i.bak "s|\${CHART_NAME}|$CHART_NAME_FROM_BUILD_JOB|g" "$TEMP_MANIFEST_PATH"
           sed -i.bak "s|\${DOCKER_IMAGE_REPOSITORY}|$DOCKER_IMAGE_REPOSITORY|g" "$TEMP_MANIFEST_PATH"
-          sed -i.bak "s|\${CHART_VERSION}|${{ inputs.chart-version }}|g" "$TEMP_MANIFEST_PATH"
+          sed -i.bak "s|\${CHART_VERSION}|$CHART_VERSION|g" "$TEMP_MANIFEST_PATH"
           
           # Clean up backup files created by sed on macOS
           rm -f "$TEMP_MANIFEST_PATH.bak"
@@ -189,16 +193,14 @@ jobs:
           kubectl apply -f "$TEMP_MANIFEST_PATH"
           echo "Argo CD Application manifest applied successfully."
           
-          # --- NEW ADDITION: Force Argo CD Sync ---
+          # Force Argo CD Sync
           # Login to Argo CD CLI first
-          argocd login localhost:8443 --username admin --password ${{ inputs.argocd-admin-password }} --insecure --grpc-web
+          argocd login localhost:8443 --username admin --password ${{ steps.get_argocd_password.outputs.argocd_password }} --insecure --grpc-web
           
           echo "Forcing Argo CD application refresh and sync for '$ARGOCD_APP_NAME'..."
-          # The --refresh flag tells Argo CD to re-poll the source repository
-          # --timeout ensures it doesn't hang indefinitely
           argocd app sync "$ARGOCD_APP_NAME" --refresh --timeout 90s 
           echo "Argo CD application sync command issued. Waiting for reconciliation..."
-        # --- END OF 'Apply Argo CD Application Manifest' step ---
+              # --- END RE-INTEGRATED ---
 
       - name: Check Application Health (with Diagnostics)
         uses: ./.github/actions/app-health-check
